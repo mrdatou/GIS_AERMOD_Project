@@ -1,11 +1,14 @@
 import os
+import sys
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog
 from PIL import Image, ImageTk
+from certifi.__main__ import args
 
 from src.mapWindow import MapWindow
 from src.dataprep import GISextract
+from src.message import RoadTabMsg
 
 
 class DataTab(tk.Frame):
@@ -312,11 +315,40 @@ class DataTab(tk.Frame):
     # Verify inputs button
     def btnVerify(self):
         # Check input values
-        pass
+        if self.checkErrBtnVerify():
+            self.passInputToMain()
 
     # Check input values when verify inputs button pressed
     def checkErrBtnVerify(self):
-        pass
+
+        # Check if columns are chosen
+
+        return True
+
+    # Pass Data tab input to Main Window variables
+    def passInputToMain(self):
+        # GeoPandas data
+        self.master.master.rd_list = self.rd_list
+
+        # GeoPandas dataframe columns
+        self.master.master.roadID = self.combo_roadID.get()  # Road ID
+        self.master.master.roadTp = self.combo_roadTp.get()  # Road Type
+        self.master.master.numLane = self.combo_numLane.get()  # Num of Lanes
+        self.master.master.laneWid = self.combo_laneWid.get()  # Lane width
+        self.master.master.shoulder = self.txt_shoulder_var  # Shoulder
+        self.master.master.geom = self.geom.get()  # Geometry
+
+        self.master.master.fromproj = self.txt_fromproj_var  # ESPG from
+        self.master.master.toproj = self.txt_toproj_var  # ESPG to
+        # Unit
+
+        # Boundary coords
+        # Reference X
+        # Reference Y
+        # Y high
+        # Y low
+        # X high
+        # X low
 
 
 # Road tab class
@@ -324,6 +356,11 @@ class RoadTab(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.grid(row=0, column=0)
+
+        # GIS data
+        self.rd_list = None
+
+        # Boundary and Reference point
 
         # Create Line frame
         self.createLineFrame()
@@ -336,52 +373,41 @@ class RoadTab(tk.Frame):
 
     def createLineFrame(self):
         # Outer Label Frame
-        labelFrame_OutLine = tk.LabelFrame(self, text="Line (LINE, RLINE, RLINEXT)", width=400, height=200,
+        labelFrame_OutLine = tk.LabelFrame(self, text="Line (LINE, RLINE, RLINEXT)", width=200, height=200,
                                            font=(None, 15, "bold"))
         labelFrame_OutLine.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
         # Inner Frame
-        # frame_InLine = tk.Frame(labelFrame_OutLine, borderwidth=2, highlightcolor='red', width=400, height=200)
         frame_InLine = tk.Frame(labelFrame_OutLine, highlightbackground="red", highlightcolor="black",
                                 highlightthickness=1, width=100, height=100, bd=0)
-        frame_InLine.grid(row=0, column=0)
+        frame_InLine.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
-        str = "Line includes LINE, RLINE and RLINEXT. The geometries of line sources are defined with coordinates of two end points and line width."
+        str = RoadTabMsg.road_line
         label_emp1 = tk.Label(frame_InLine, text=str, wraplength=150)
         label_emp1.grid(row=0, column=0)
 
-        # Control line example button
-        def btnLineExample():
-            lineGraphicWin = tk.Toplevel(self)
-            canvas = tk.Canvas(lineGraphicWin, width=300, height=300)
-            canvas.grid()
-
-            img = Image.open('C:\\Users\\Shiro\\Desktop\\0120.jpg')
-            my_image = ImageTk.PhotoImage(img)
-            canvas.create_image(0, 0, anchor=tk.NW, image=my_image)
-
-            tk.Grid.rowconfigure(lineGraphicWin, 0, weight=1)
-            tk.Grid.columnconfigure(lineGraphicWin, 0, weight=1)
-
         # Place LIne's graphic example button
         self.button_lineExample = ttk.Button(frame_InLine)
-        self.button_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE, command=btnLineExample)
+        self.button_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
+                                          command=lambda: repr(self.btnGraphicExample(RoadTabMsg.lineGrapPath)))
         self.button_lineExample.grid(row=1, column=0)
 
         # Place LINE columns button
         self.button_lineCols = ttk.Button(frame_InLine)
-        self.button_lineCols.configure(text="LINE columns", padding=10, default=tk.ACTIVE, command=btnLineExample)
+        self.button_lineCols.configure(text="LINE columns", padding=10, default=tk.ACTIVE,
+                                       command=lambda: repr(self.btnCol(0)))
         self.button_lineCols.grid(row=2, column=0)
 
         # Place Generate Line button
         self.button_generateLine = ttk.Button(labelFrame_OutLine)
-        self.button_generateLine.configure(text="Generate Line", padding=10, default=tk.ACTIVE, command=btnLineExample)
+        self.button_generateLine.configure(text="Generate Line", padding=10, default=tk.ACTIVE,
+                                           command=lambda: repr(self.btnGenerate(0)))
         self.button_generateLine.grid(row=1, column=0)
 
         # Place Visualize Line button
         self.button_visualizeLine = ttk.Button(labelFrame_OutLine)
         self.button_visualizeLine.configure(text="Visualize Line", padding=10, default=tk.ACTIVE,
-                                            command=btnLineExample)
+                                            command=self.btnVisualize(0))
         self.button_visualizeLine.grid(row=2, column=0)
 
     # Create AREA frame
@@ -391,6 +417,39 @@ class RoadTab(tk.Frame):
                                            font=(None, 15, "bold"))
         labelFrame_OutArea.grid(row=0, column=1, sticky=tk.W + tk.E + tk.N + tk.S)
 
+        # Inner Frame
+        frame_InArea = tk.Frame(labelFrame_OutArea, highlightbackground="red", highlightcolor="black",
+                                highlightthickness=1, width=100, height=100, bd=0)
+        frame_InArea.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+
+        str = RoadTabMsg.road_area
+        label_emp2 = tk.Label(frame_InArea, text=str, wraplength=150)
+        label_emp2.grid(row=0, column=0)
+
+        # Place Area's graphic example button
+        self.btn_lineExample = ttk.Button(frame_InArea)
+        self.btn_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
+                                       command=lambda: repr(self.btnGraphicExample(RoadTabMsg.areaGrapPath)))
+        self.btn_lineExample.grid(row=1, column=0)
+
+        # Place Area columns button
+        self.btn_areaCols = ttk.Button(frame_InArea)
+        self.btn_areaCols.configure(text="LINE columns", padding=10, default=tk.ACTIVE,
+                                    command=lambda: repr(self.btnCol(1)))
+        self.btn_areaCols.grid(row=2, column=0)
+
+        # Place Generate Area button
+        self.btn_generateArea = ttk.Button(labelFrame_OutArea)
+        self.btn_generateArea.configure(text="Generate Line", padding=10, default=tk.ACTIVE,
+                                        command=lambda: repr(self.btnGenerate(1)))
+        self.btn_generateArea.grid(row=1, column=0)
+
+        # Place Visualize Area button
+        self.btn_visualizeArea = ttk.Button(labelFrame_OutArea)
+        self.btn_visualizeArea.configure(text="Visualize Line", padding=10, default=tk.ACTIVE,
+                                         command=self.btnVisualize(1))
+        self.btn_visualizeArea.grid(row=2, column=0)
+
     # Create AREA frame
     def createVolFrame(self):
         # Outer Label Frame
@@ -398,11 +457,151 @@ class RoadTab(tk.Frame):
                                           font=(None, 15, "bold"))
         labelFrame_OutVol.grid(row=0, column=2, sticky=tk.W + tk.E + tk.N + tk.S)
 
+        # Inner Frame
+        frame_InVol = tk.Frame(labelFrame_OutVol, highlightbackground="red", highlightcolor="black",
+                               highlightthickness=1, width=100, height=100, bd=0)
+        frame_InVol.grid(row=0, column=0, columnspan=2, sticky=tk.W + tk.E + tk.N + tk.S)
+
+        str = RoadTabMsg.road_vol
+        label_emp2 = tk.Label(frame_InVol, text=str, wraplength=150)
+        label_emp2.grid(row=0, column=0)
+
+        # Place VOLUME's graphic example button
+        btn_volExample = ttk.Button(frame_InVol)
+        btn_volExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
+                                 command=lambda: repr(self.btnGraphicExample(RoadTabMsg.areaGrapPath)))
+        btn_volExample.grid(row=1, column=0)
+
+        # Place Area columns button
+        btn_volCols = ttk.Button(frame_InVol)
+        btn_volCols.configure(text="VOLUME columns", padding=10, default=tk.ACTIVE,
+                              command=lambda: repr(self.btnCol(2)))
+        btn_volCols.grid(row=2, column=0)
+
+        # Put textbox for max size
+        label_maxSize = tk.Label(labelFrame_OutVol, text="Max Size (m) Should <= 8 m")
+        label_maxSize.grid(row=1, column=0)
+
+        self.txt_maxsize_var = tk.StringVar()
+        self.txt_maxsize = tk.Entry(labelFrame_OutVol, textvariable=self.txt_maxsize_var, width=10)
+        self.txt_maxsize.grid(row=1, column=1, sticky=tk.W)
+
+        # Place Generate VOLUME button
+        self.btn_generateArea = ttk.Button(labelFrame_OutVol)
+        self.btn_generateArea.configure(text="Generate VOLUME", padding=10, default=tk.ACTIVE,
+                                        command=lambda: repr(self.btnGenerate(2)))
+        self.btn_generateArea.grid(row=1, column=0, columnspan=2)
+
+        # Place Visualize VOLUME button
+        self.btn_visualizeArea = ttk.Button(labelFrame_OutVol)
+        self.btn_visualizeArea.configure(text="Visualize VOLUME", padding=10, default=tk.ACTIVE,
+                                         command=self.btnVisualize(2))
+        self.btn_visualizeArea.grid(row=2, column=0, columnspan=2)
+
+    # Control graphic example button (specifying image path)
+    def btnGraphicExample(self, imgPath):
+
+        # Open pop up window
+        graphicWin = tk.Toplevel(self)
+
+        jpg = Image.open(imgPath)
+        my_image = ImageTk.PhotoImage(jpg)
+        # my_image = tk.PhotoImage(file=imgPath)
+
+        canvas = tk.Canvas(graphicWin, width=300, height=300)
+        canvas.grid()
+        canvas.create_image(0, 0, anchor=tk.NW, image=my_image)
+
+        # tk.Grid.rowconfigure(graphicWin, 0, weight=1)
+        # tk.Grid.columnconfigure(graphicWin, 0, weight=1)
+
+    # Index LINE=0, AREA=1, VOLUME=2
+    # Control columns button
+    def btnCol(self, index):
+        colWin = tk.Toplevel(self)
+        # Line
+        if index == 0:
+            colWin.title("“Line.csv” Features Explained")
+            lst = RoadTabMsg.lstLineCol
+        # Area
+        if index == 1:
+            colWin.title("“AREA.csv” Features Explained")
+            lst = RoadTabMsg.lstAreaCol
+        # Volume
+        if index == 2:
+            colWin.title("“VOLUME_XX.csv” Features Explained")
+            lst = RoadTabMsg.lstVolCol
+
+        # Place labels of the columns in pop up window
+        for col in lst:
+            label = tk.Label(colWin, text=col, font=(None, 12))
+            label.grid(sticky=tk.W)
+
+    # Control Generate button
+    def btnGenerate(self, index):
+        # Line
+        if index == 0:
+            pass
+        # Area
+        if index == 1:
+            pass
+        # Volume
+        if index == 2:
+            pass
+
+    # Control Visualize button
+    def btnVisualize(self, index):
+        # Line
+        if index == 0:
+            pass
+        # Area
+        if index == 1:
+            pass
+        # Volume
+        if index == 2:
+            pass
+
+
+# Main window class
+class MainWindow(tk.Tk):
+    def __init__(self, *args, **kwargs):
+        tk.Tk.__init__(self, *args, **kwargs)
+
+        # Main window
+        self.title("GIS TO AERMOD Tool")
+        self.geometry("700x400")
+
+        # list of variables
+        self.rd_list = None  # GIS data
+
+        # List of columns
+        self.roadID = None
+        self.roadTp = None
+        self.numLane = None
+        self.laneWid = None
+        self.shoulder = None
+        self.geom = None
+
+        # Projection
+        self.fromproj = None  # Original ESPG
+        self.toproj = None  # Dest ESPG
+        self.isFeet = None  # Unit
+
+        # List of Boundary variables
+        self.xRef = None
+        self.yRef = None
+        self.yHigh = None
+        self.yLow = None
+        self.xLeft = None
+        self.xRight = None
+
 
 def main():
-    root = tk.Tk()
-    root.title("GIS TO AERMOD Tool")
-    root.geometry("700x400")
+    # root = tk.Tk()
+    # root.title("GIS TO AERMOD Tool")
+    # root.geometry("700x400")
+
+    root = MainWindow()
 
     nb = ttk.Notebook(root, width=800, height=600)
 
