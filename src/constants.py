@@ -52,4 +52,5 @@ class RoadTabConstants():
     VOLUME = 2
 
     # Titlle of popup window for visualizing data
-    visualizing_title_LINE = "Visualizing LINE.csv"
+    visualize_title_LINE = "Visualize LINE.csv"
+    visualize_title_AREA = "Visualize AREA.csv"

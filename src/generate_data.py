@@ -85,9 +85,9 @@ def generateLINE(data):
     end = time.time()
     print('Take about', round((end - st) / 60, 2), 'minutes.')
 
-# Visualizing LINE
-def visualizingLINE(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
 
+# Visualizing LINE
+def visualizeLINE(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
     def add_line_from_line(row):
         xxxx = row['coord_aer'].split(' ')
         x = [float(xxxx[0]), float(xxxx[2])]
@@ -109,4 +109,114 @@ def visualizingLINE(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_h
     plt.ylim(yref_lower_m, yref_higher_m)
     plt.savefig(output_path + "/GIS_line.jpg", bbox_inches='tight', dpi=600)
 
+    return fig
+
+
+# Generate AREA
+def generateAREA(rd_list, output_path, GISRdID, L_tp):
+    # Process for AREA
+    # Maximum number of nodes for AREA modeling (Default as 10 to limit max vertices as 20. The value has to be <=10)
+    max_pts = 10
+    print('')
+    print('Convert road GIS to AREA source..')
+    st = time.time()
+    rd_geo = gpd.GeoDataFrame(columns=[GISRdID, 'linkID', 'linkID_new', 'F_LTYPE', 'wd', 'bw', 'area', \
+                                       'x_ini', 'y_ini', 'n', 'poly', 'geometry', 'coord', 'vertex_aer', 'coord_aer'])
+    for i, row in rd_list.iterrows():
+        if (type(row.geometry) == LineString):
+            link_coo = row.geometry.coords[:]
+            nn = int(len(link_coo) / max_pts) - 1 + (len(link_coo) % max_pts > 0)
+            ii = 0
+            while ii <= nn:
+                if (ii == 0):
+                    sub_geom = link_coo[ii * max_pts:max_pts * (ii + 1)]
+                else:
+                    sub_geom = link_coo[ii * max_pts - 1:max_pts * (ii + 1)]
+                geo_m = LineString(sub_geom)
+                poly, geo_m, p_l, area, ini_x, ini_y, coord_aer, n = geo_area(geo_m, row['wd'] / 2.0)
+                rd_geo.loc[len(rd_geo)] = [row[GISRdID], row['linkID'], str(row['linkID']) + '__' + str(ii), row[L_tp], \
+                                           row['wd'], row['wd'] / 2, area, ini_x, ini_y, n, poly, \
+                                           geo_m, p_l, str(ini_x) + ' ' + str(ini_y), coord_aer]
+                ii += 1
+        elif (type(row.geometry) == MultiLineString):
+            iii = 1
+            print(type(row.geometry), row['linkID'], ' is multistrings, further assigning IDs')
+            for subgeo in row.geometry:
+                link_coo = subgeo.coords[:]
+                nn = int(len(link_coo) / max_pts) - 1 + (len(link_coo) % max_pts > 0)
+                ii = 0
+                while ii <= nn:
+                    if ii == 0:
+                        sub_geom = link_coo[ii * max_pts:max_pts * (ii + 1)]
+                    else:
+                        sub_geom = link_coo[ii * max_pts - 1:max_pts * (ii + 1)]
+                    geo_m = LineString(sub_geom)
+                    poly, geo_m, p_l, area, ini_x, ini_y, coord_aer, n = geo_area(geo_m, row['wd'] / 2.0)
+                    rd_geo.loc[len(rd_geo)] = [row[GISRdID], row['linkID'],
+                                               str(row['linkID']) + '_' + str(iii) + '__' + str(ii), row[L_tp], \
+                                               row['wd'], row['wd'] / 2, area, ini_x, ini_y, n, poly, geo_m, p_l,
+                                               str(ini_x) + ' ' + str(ini_y), coord_aer]
+                    ii += 1
+    # just to show the link geometry to AERMOD
+    rd_geo.to_csv(output_path + '/AREA.csv', index=False)
+    print("AREA generation done! exported to 'AREA.csv'.")
+    end = time.time()
+    print('Take about', round((end - st) / 60, 2), 'minutes.')
+    # run_df = pd.DataFrame(columns = ['method','links','sources','time'])
+    # run_df.loc[0] = ['AREA', len(rd_list), len(rd_geo), round((end-st),2)]
+    # with open(path + 'gen_time.csv', 'a') as f:
+    #    run_df.to_csv(path + 'gen_time.csv', mode = 'a',index = False, header = f.tell()==0)
+
+
+# Function for generating AREA
+def geo_area(geo_m, wd):
+    ini_x = 0.0
+    ini_y = 0.0
+    lp_l = geo_m.parallel_offset(wd, 'left', join_style=2)
+    lp_l = lp_l.coords[:]
+    if len(lp_l) > 10:
+        index_l = [int(i) for i in np.linspace(0, len(lp_l) - 1, 10)]
+        lp_l = [lp_l[i] for i in index_l]
+    rp_l = geo_m.parallel_offset(wd, 'right', join_style=2)
+    rp_l = rp_l.coords[:]
+    if len(rp_l) > 10:
+        index_l = [int(i) for i in np.linspace(0, len(rp_l) - 1, 10)]
+        rp_l = [rp_l[i] for i in index_l]
+    # print(lp_l)
+    # print(rp_l)
+    p_l = lp_l + rp_l
+    ini_x = round(p_l[0][0], 1)
+    ini_y = round(p_l[0][1], 1)
+    poly = geometry.Polygon((round(p[0], 1), round(p[1], 1)) for p in p_l)
+    coord_aer = ''
+    for p in p_l:
+        coord_aer = coord_aer + str(round(p[0], 1)) + ' ' + str(round(p[1], 1)) + ' '
+    area = poly.area
+    return poly, geo_m, p_l, area, ini_x, ini_y, coord_aer, len(p_l)
+
+# Visualizing AREA
+def visualizeAREA(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
+    show_receptor = False
+
+    def add_polygon_from_poly(row):
+        xxxx = row['poly'].split('((')[1].split('))')[0].split(', ')
+        x = [float(xx.split(' ')[0]) for xx in xxxx]
+        y = [float(yy.split(' ')[1]) for yy in xxxx]
+        return geometry.Polygon((x[j], y[j]) for j in range(len(x)))
+
+    # For Area:
+    rd_geo = pd.read_csv(output_path + '/AREA.csv')
+    rd_geo['geometry'] = rd_geo.apply(lambda row: add_polygon_from_poly(row), axis=1)
+    rd_geo = gpd.GeoDataFrame(rd_geo, geometry=rd_geo.geometry)
+    rd_geo.buffer(2)
+    fig, ax = plt.subplots()
+    rd_geo.plot(ax=ax, edgecolor='black', linewidth=0.3, facecolor="none", zorder=2)
+    rd_geo.plot(ax=ax, color='blue', alpha=0.3, linewidth=0.3, zorder=2)
+    plt.title("AERMOD 'AREA' Geometry")
+    plt.axis('scaled')
+    plt.xlabel('meter')
+    plt.ylabel('meter')
+    plt.xlim(xref_left_m, xref_right_m)
+    plt.ylim(yref_lower_m, yref_higher_m)
+    plt.savefig(output_path + "/GIS_area.jpg", bbox_inches='tight', dpi=600)
     return fig

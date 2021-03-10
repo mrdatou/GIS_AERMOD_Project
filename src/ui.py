@@ -10,7 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.widgets import RectangleSelector
 
 from src.GISPlotWindow import GISplotWindow
-from src.generate_data import generateLINE, visualizingLINE
+from src.generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA
 from src.dataprep import GISextract, dataConversion
 from src.constants import RoadTabConstants
 
@@ -619,7 +619,7 @@ class RoadTab(tk.Frame, Data):
             self.generateLine()
         # Area
         if index == RoadTabConstants.AREA:
-            pass
+            self.generateAREA()
         # Volume
         if index == RoadTabConstants.VOLUME:
             pass
@@ -630,19 +630,24 @@ class RoadTab(tk.Frame, Data):
         generateLINE(Data)
 
     # Generate AREA
+    def generateAREA(self):
+        generateAREA(Data.rd_list, Data.output_path, Data.roadID, Data.roadTp)
 
-    # GEnerate VOLUME
+    # Generate VOLUME
+    def generateVOLUME(self):
+        pass
 
     # Control Visualize button
     def btnVisualize(self, index):
         # LINE
         if index == RoadTabConstants.LINE:
-            fig = visualizingLINE(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
+            fig = visualizeLINE(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
                                   Data.yref_higher_m)
-            title = RoadTabConstants.visualizing_title_LINE
+            title = RoadTabConstants.visualize_title_LINE
         # AREA
         if index == RoadTabConstants.AREA:
-            pass
+            fig = visualizeAREA(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m, Data.yref_higher_m)
+            title = RoadTabConstants.visualize_title_AREA
         # VOLUME
         if index == RoadTabConstants.VOLUME:
             pass
@@ -652,6 +657,9 @@ class RoadTab(tk.Frame, Data):
         visualizeWindow.title(title)
         canvas = FigureCanvasTkAgg(fig, master=visualizeWindow)
         canvas.get_tk_widget().grid(row=0, column=0, rowspan=4, sticky=tk.N + tk.S + tk.W + tk.E)
+        toolbar = NavigationToolbar2Tk(canvas, visualizeWindow, pack_toolbar=False)
+        toolbar.update()
+        toolbar.grid(row=4, column=0)
         tk.Grid.rowconfigure(visualizeWindow, 0, weight=1)
         tk.Grid.columnconfigure(visualizeWindow, 0, weight=1)
 
