@@ -4,14 +4,53 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog
 from PIL import Image, ImageTk
-from certifi.__main__ import args
+from matplotlib import pyplot
+from matplotlib.backends._backend_tk import NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.widgets import RectangleSelector
 
-from src.mapWindow import MapWindow
-from src.dataprep import GISextract
-from src.message import RoadTabMsg
+from src.GISPlotWindow import GISplotWindow
+from src.generate_data import generateLINE, visualizingLINE
+from src.dataprep import GISextract, dataConversion
+from src.constants import RoadTabConstants
 
 
-class DataTab(tk.Frame):
+# Class of variables which are shared with multiple frames
+class Data:
+    rd_list = None  # GeoPandas
+    path = None  # Imported shp File's location
+    output_path = None  # Output file's location path
+
+    # Column names
+    roadID = None  # Road ID
+    roadTp = None  # Road Type
+    numLane = None  # Num of Lanes
+    laneWid = None  # Lane width
+    shoulder = None  # Shoulder
+    geom = None  # Geometry
+
+    # ESPG setting
+    fromproj = None  # ESPG from
+    toproj = None  # ESPG to
+    isFeet = False  # Unit
+
+    # Boundary and Reference point
+    xRef = None  # Reference X
+    yRef = None  # Reference Y
+    yHigh = None  # Y high
+    yLow = None  # Y low
+    xLeft = None  # X left
+    xRight = None  # X right
+
+    # Converted coords of reference point
+    xref_left_m = None
+    xref_right_m = None
+    yref_lower_m = None
+    yref_higher_m = None
+
+
+# Data Tab class inherit Data class to share data with other tabs
+class DataTab(tk.Frame, Data):
     def __init__(self, master=None):
         super().__init__(master)
         self.grid(row=0, column=0)
@@ -60,11 +99,31 @@ class DataTab(tk.Frame):
 
     # Define Import button function
     def btnImport(self):
+        # Check if the selected file exists
+        path = self.entry_file.get("1.0", tk.END)
+
+        Data.path = self.path
+
         # Extract GIS data
-        self.rd_list = GISextract(self.path)
+        self.rd_list, Data.path = GISextract(Data.path)
 
         # Build file setting's drop down menus
         self.buildDropDownMenuSetting()
+
+        '''
+        if os.path.exists(path):
+            print("success")
+            Data.path = path
+            # Extract GIS data
+            self.rd_list, Data.path = GISextract(Data.path)
+
+            # Build file setting's drop down menus
+            self.buildDropDownMenuSetting()
+
+        else:
+            # File does not exist
+            print("Not found")
+        '''
 
     # Setting Dropdown menu of File setting frame
     def buildDropDownMenuSetting(self):
@@ -192,16 +251,15 @@ class DataTab(tk.Frame):
         # Control meter feet checkbox
         def controlChkUnit():
             # If m or f checked, disable the other
-            if self.chk_m:
+            if self.bln_m:
+                # If m is checked
                 self.chk_f.config(state=tk.DISABLED)
-            elif self.chk_f:
+            elif self.bln_f:
+                # IF f is checked
                 self.chk_m.config(state=tk.DISABLED)
-            else:
+            elif self.bln_m == False and self.bln_f == False:
                 self.chk_m.config(state=tk.NORMAL)
                 self.chk_f.config(state=tk.NORMAL)
-
-            # self.chk_m.config(state=tk.DISABLED if not self.bln_f else tk.NORMAL)
-            # self.chk_f.config(state=tk.DISABLED if not self.bln_m else tk.NORMAL)
 
         # Meter checkbox
         self.bln_m = tk.BooleanVar(False)
@@ -308,9 +366,9 @@ class DataTab(tk.Frame):
     # Build GIS plot window
     def buildMapWindow(self, window):
         # Set mapWindow frame with pop up window
-        mapWin = MapWindow(self.rd_list, window)
-        tk.Grid.rowconfigure(mapWin, 0, weight=1)
-        tk.Grid.columnconfigure(mapWin, 0, weight=1)
+        gisWin = GISplotWindow(self.rd_list, window)
+        tk.Grid.rowconfigure(gisWin, 0, weight=1)
+        tk.Grid.columnconfigure(gisWin, 0, weight=1)
 
     # Verify inputs button
     def btnVerify(self):
@@ -322,45 +380,62 @@ class DataTab(tk.Frame):
     def checkErrBtnVerify(self):
 
         # Check if columns are chosen
+        if self.combo_roadID.get() == "" or self.combo_roadTp.get() == "" or self.combo_numLane.get() or self.combo_laneWid.get() == "" or self.combo_geom.get() == "":
+            print("err found")
+
+        if self.txt_shoulder_var.get() == "":
+            print("shoulder no")
+
+        if self.txt_fromproj_var.get() == "" or self.txt_toproj_var.get() == "":
+            print("bbb")
+
+        if (self.bln_f is True and self.bln_m is True) or (self.bln_f is False and self.bln_m is False):
+            pass
+
+        if self.txt_xRef_var.get() == "" or self.txt_yRef_var.get() == "" or self.txt_yHigh_var.get() == "" or self.txt_yLow_var.get() == "" or self.txt_xLeft_var.get() == "" or self.txt_xRight_var.get() == "":
+            print("aaa")
 
         return True
 
     # Pass Data tab input to Main Window variables
     def passInputToMain(self):
         # GeoPandas data
-        self.master.master.rd_list = self.rd_list
+        Data.rd_list = self.rd_list
 
-        # GeoPandas dataframe columns
-        self.master.master.roadID = self.combo_roadID.get()  # Road ID
-        self.master.master.roadTp = self.combo_roadTp.get()  # Road Type
-        self.master.master.numLane = self.combo_numLane.get()  # Num of Lanes
-        self.master.master.laneWid = self.combo_laneWid.get()  # Lane width
-        self.master.master.shoulder = self.txt_shoulder_var  # Shoulder
-        self.master.master.geom = self.geom.get()  # Geometry
+        # Column names
+        Data.roadID = self.combo_roadID.get()  # Road ID
+        Data.roadTp = self.combo_roadTp.get()  # Road Type
+        Data.numLane = self.combo_numLane.get()  # Num of Lanes
+        Data.laneWid = self.combo_laneWid.get()  # Lane width
+        Data.shoulder = float(self.txt_shoulder_var.get())  # Shoulder
+        Data.geom = self.combo_geom.get()  # Geometry
 
-        self.master.master.fromproj = self.txt_fromproj_var  # ESPG from
-        self.master.master.toproj = self.txt_toproj_var  # ESPG to
-        # Unit
+        # ESPG setting
+        Data.fromproj = 'epsg:' + self.txt_fromproj_var.get()  # ESPG from
+        Data.toproj = 'epsg:' + self.txt_toproj_var.get()  # ESPG to
+        Data.isFeet = False  # Unit
 
-        # Boundary coords
-        # Reference X
-        # Reference Y
-        # Y high
-        # Y low
-        # X high
-        # X low
+        # Boundary and Reference point
+        Data.xRef = float(self.txt_xRef_var.get())  # Reference X
+        Data.yRef = float(self.txt_yRef_var.get())  # Reference Y
+        Data.yHigh = float(self.txt_yHigh_var.get())  # Y high
+        Data.yLow = float(self.txt_yLow_var.get())  # Y low
+        Data.xLeft = float(self.txt_xLeft_var.get())  # X left
+        Data.xRight = float(self.txt_xRight_var.get())  # X right
+
+        # Convert GIS data for future data process
+        Data.rd_list, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m, Data.yref_higher_m, Data.output_path = dataConversion(
+            Data)
 
 
 # Road tab class
-class RoadTab(tk.Frame):
+class RoadTab(tk.Frame, Data):
     def __init__(self, master=None):
         super().__init__(master)
         self.grid(row=0, column=0)
 
         # GIS data
         self.rd_list = None
-
-        # Boundary and Reference point
 
         # Create Line frame
         self.createLineFrame()
@@ -382,14 +457,14 @@ class RoadTab(tk.Frame):
                                 highlightthickness=1, width=100, height=100, bd=0)
         frame_InLine.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
-        str = RoadTabMsg.road_line
+        str = RoadTabConstants.road_line
         label_emp1 = tk.Label(frame_InLine, text=str, wraplength=150)
         label_emp1.grid(row=0, column=0)
 
         # Place LIne's graphic example button
         self.button_lineExample = ttk.Button(frame_InLine)
         self.button_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
-                                          command=lambda: repr(self.btnGraphicExample(RoadTabMsg.lineGrapPath)))
+                                          command=lambda: repr(self.btnGraphicExample(RoadTabConstants.lineGrapPath)))
         self.button_lineExample.grid(row=1, column=0)
 
         # Place LINE columns button
@@ -401,13 +476,13 @@ class RoadTab(tk.Frame):
         # Place Generate Line button
         self.button_generateLine = ttk.Button(labelFrame_OutLine)
         self.button_generateLine.configure(text="Generate Line", padding=10, default=tk.ACTIVE,
-                                           command=lambda: repr(self.btnGenerate(0)))
+                                           command=lambda: repr(self.btnGenerate(RoadTabConstants.LINE)))
         self.button_generateLine.grid(row=1, column=0)
 
         # Place Visualize Line button
         self.button_visualizeLine = ttk.Button(labelFrame_OutLine)
         self.button_visualizeLine.configure(text="Visualize Line", padding=10, default=tk.ACTIVE,
-                                            command=self.btnVisualize(0))
+                                            command=lambda: repr(self.btnVisualize(RoadTabConstants.LINE)))
         self.button_visualizeLine.grid(row=2, column=0)
 
     # Create AREA frame
@@ -422,32 +497,32 @@ class RoadTab(tk.Frame):
                                 highlightthickness=1, width=100, height=100, bd=0)
         frame_InArea.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
-        str = RoadTabMsg.road_area
+        str = RoadTabConstants.road_area
         label_emp2 = tk.Label(frame_InArea, text=str, wraplength=150)
         label_emp2.grid(row=0, column=0)
 
         # Place Area's graphic example button
         self.btn_lineExample = ttk.Button(frame_InArea)
         self.btn_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
-                                       command=lambda: repr(self.btnGraphicExample(RoadTabMsg.areaGrapPath)))
+                                       command=lambda: repr(self.btnGraphicExample(RoadTabConstants.areaGrapPath)))
         self.btn_lineExample.grid(row=1, column=0)
 
         # Place Area columns button
         self.btn_areaCols = ttk.Button(frame_InArea)
         self.btn_areaCols.configure(text="LINE columns", padding=10, default=tk.ACTIVE,
-                                    command=lambda: repr(self.btnCol(1)))
+                                    command=lambda: repr(self.btnCol(RoadTabConstants.AREA)))
         self.btn_areaCols.grid(row=2, column=0)
 
         # Place Generate Area button
         self.btn_generateArea = ttk.Button(labelFrame_OutArea)
         self.btn_generateArea.configure(text="Generate Line", padding=10, default=tk.ACTIVE,
-                                        command=lambda: repr(self.btnGenerate(1)))
+                                        command=lambda: repr(self.btnGenerate(RoadTabConstants.AREA)))
         self.btn_generateArea.grid(row=1, column=0)
 
         # Place Visualize Area button
         self.btn_visualizeArea = ttk.Button(labelFrame_OutArea)
         self.btn_visualizeArea.configure(text="Visualize Line", padding=10, default=tk.ACTIVE,
-                                         command=self.btnVisualize(1))
+                                         command=lambda: repr(self.btnVisualize(RoadTabConstants.AREA)))
         self.btn_visualizeArea.grid(row=2, column=0)
 
     # Create AREA frame
@@ -462,14 +537,14 @@ class RoadTab(tk.Frame):
                                highlightthickness=1, width=100, height=100, bd=0)
         frame_InVol.grid(row=0, column=0, columnspan=2, sticky=tk.W + tk.E + tk.N + tk.S)
 
-        str = RoadTabMsg.road_vol
+        str = RoadTabConstants.road_vol
         label_emp2 = tk.Label(frame_InVol, text=str, wraplength=150)
         label_emp2.grid(row=0, column=0)
 
         # Place VOLUME's graphic example button
         btn_volExample = ttk.Button(frame_InVol)
         btn_volExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
-                                 command=lambda: repr(self.btnGraphicExample(RoadTabMsg.areaGrapPath)))
+                                 command=lambda: repr(self.btnGraphicExample(RoadTabConstants.areaGrapPath)))
         btn_volExample.grid(row=1, column=0)
 
         # Place Area columns button
@@ -495,7 +570,7 @@ class RoadTab(tk.Frame):
         # Place Visualize VOLUME button
         self.btn_visualizeArea = ttk.Button(labelFrame_OutVol)
         self.btn_visualizeArea.configure(text="Visualize VOLUME", padding=10, default=tk.ACTIVE,
-                                         command=self.btnVisualize(2))
+                                         command=lambda: repr(self.btnVisualize(2)))
         self.btn_visualizeArea.grid(row=2, column=0, columnspan=2)
 
     # Control graphic example button (specifying image path)
@@ -522,15 +597,15 @@ class RoadTab(tk.Frame):
         # Line
         if index == 0:
             colWin.title("“Line.csv” Features Explained")
-            lst = RoadTabMsg.lstLineCol
+            lst = RoadTabConstants.lstLineCol
         # Area
         if index == 1:
             colWin.title("“AREA.csv” Features Explained")
-            lst = RoadTabMsg.lstAreaCol
+            lst = RoadTabConstants.lstAreaCol
         # Volume
         if index == 2:
             colWin.title("“VOLUME_XX.csv” Features Explained")
-            lst = RoadTabMsg.lstVolCol
+            lst = RoadTabConstants.lstVolCol
 
         # Place labels of the columns in pop up window
         for col in lst:
@@ -540,26 +615,45 @@ class RoadTab(tk.Frame):
     # Control Generate button
     def btnGenerate(self, index):
         # Line
-        if index == 0:
-            pass
+        if index == RoadTabConstants.LINE:
+            self.generateLine()
         # Area
-        if index == 1:
+        if index == RoadTabConstants.AREA:
             pass
         # Volume
-        if index == 2:
+        if index == RoadTabConstants.VOLUME:
             pass
+
+    # Generate LINE
+    def generateLine(self):
+        # Generate LINE.csv (Argument: converted GIS data, Road ID column, Road Type column)
+        generateLINE(Data)
+
+    # Generate AREA
+
+    # GEnerate VOLUME
 
     # Control Visualize button
     def btnVisualize(self, index):
-        # Line
-        if index == 0:
+        # LINE
+        if index == RoadTabConstants.LINE:
+            fig = visualizingLINE(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
+                                  Data.yref_higher_m)
+            title = RoadTabConstants.visualizing_title_LINE
+        # AREA
+        if index == RoadTabConstants.AREA:
             pass
-        # Area
-        if index == 1:
+        # VOLUME
+        if index == RoadTabConstants.VOLUME:
             pass
-        # Volume
-        if index == 2:
-            pass
+
+        # Open pop up window to show the output plot
+        visualizeWindow = tk.Toplevel(self)
+        visualizeWindow.title(title)
+        canvas = FigureCanvasTkAgg(fig, master=visualizeWindow)
+        canvas.get_tk_widget().grid(row=0, column=0, rowspan=4, sticky=tk.N + tk.S + tk.W + tk.E)
+        tk.Grid.rowconfigure(visualizeWindow, 0, weight=1)
+        tk.Grid.columnconfigure(visualizeWindow, 0, weight=1)
 
 
 # Main window class
@@ -570,30 +664,6 @@ class MainWindow(tk.Tk):
         # Main window
         self.title("GIS TO AERMOD Tool")
         self.geometry("700x400")
-
-        # list of variables
-        self.rd_list = None  # GIS data
-
-        # List of columns
-        self.roadID = None
-        self.roadTp = None
-        self.numLane = None
-        self.laneWid = None
-        self.shoulder = None
-        self.geom = None
-
-        # Projection
-        self.fromproj = None  # Original ESPG
-        self.toproj = None  # Dest ESPG
-        self.isFeet = None  # Unit
-
-        # List of Boundary variables
-        self.xRef = None
-        self.yRef = None
-        self.yHigh = None
-        self.yLow = None
-        self.xLeft = None
-        self.xRight = None
 
 
 def main():
