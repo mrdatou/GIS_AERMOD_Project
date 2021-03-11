@@ -1,18 +1,16 @@
 import os
-import sys
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import filedialog
+
 from PIL import Image, ImageTk
-from matplotlib import pyplot
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.widgets import RectangleSelector
 
 from src.GISPlotWindow import GISplotWindow
-from src.generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA
-from src.dataprep import GISextract, dataConversion
 from src.constants import RoadTabConstants
+from src.dataprep import GISextract, dataConversion
+from src.generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA
 
 
 # Class of variables which are shared with multiple frames
@@ -248,28 +246,32 @@ class DataTab(tk.Frame, Data):
         label_chkUnit = tk.Label(self.labelFrame_Projection, text="Unit of destination ESPG")
         label_chkUnit.grid(row=2, column=0)
 
-        # Control meter feet checkbox
-        def controlChkUnit():
-            # If m or f checked, disable the other
-            if self.bln_m:
-                # If m is checked
-                self.chk_f.config(state=tk.DISABLED)
-            elif self.bln_f:
-                # IF f is checked
-                self.chk_m.config(state=tk.DISABLED)
-            elif self.bln_m == False and self.bln_f == False:
-                self.chk_m.config(state=tk.NORMAL)
-                self.chk_f.config(state=tk.NORMAL)
-
         # Meter checkbox
-        self.bln_m = tk.BooleanVar(False)
-        self.chk_m = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_m, command=controlChkUnit, text="m")
+        self.bln_m = tk.BooleanVar()
+        self.bln_m.set(False)
+        self.chk_m = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_m, command=self.controlChkUnit,
+                                    text="m")
         self.chk_m.grid(row=2, column=1)
 
         # Feet checkbox
-        self.bln_f = tk.BooleanVar(False)
-        self.chk_f = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_f, command=controlChkUnit, text="ft")
+        self.bln_f = tk.BooleanVar()
+        self.bln_f.set(False)
+        self.chk_f = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_f, command=self.controlChkUnit,
+                                    text="ft")
         self.chk_f.grid(row=3, column=1)
+
+    # Control meter feet checkbox
+    def controlChkUnit(self):
+        # If m or f checked, disable the other
+        if self.bln_m.get():
+            # If Meter is selected
+            self.chk_f.config(state=tk.DISABLED)
+        elif self.bln_f.get():
+            # If Feet is selected
+            self.chk_m.config(state=tk.DISABLED)
+        elif self.bln_m.get() == False and self.bln_f.get() == False:
+            self.chk_m.config(state=tk.NORMAL)
+            self.chk_f.config(state=tk.NORMAL)
 
     # Create Boundary setting frame
     def createBoundarySetting(self):
@@ -413,7 +415,11 @@ class DataTab(tk.Frame, Data):
         # ESPG setting
         Data.fromproj = 'epsg:' + self.txt_fromproj_var.get()  # ESPG from
         Data.toproj = 'epsg:' + self.txt_toproj_var.get()  # ESPG to
-        Data.isFeet = False  # Unit
+
+        if self.bln_m:
+            Data.isFeet = False  # Unit
+        elif self.bln_f:
+            Data.isFeet = True
 
         # Boundary and Reference point
         Data.xRef = float(self.txt_xRef_var.get())  # Reference X
@@ -642,11 +648,12 @@ class RoadTab(tk.Frame, Data):
         # LINE
         if index == RoadTabConstants.LINE:
             fig = visualizeLINE(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
-                                  Data.yref_higher_m)
+                                Data.yref_higher_m)
             title = RoadTabConstants.visualize_title_LINE
         # AREA
         if index == RoadTabConstants.AREA:
-            fig = visualizeAREA(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m, Data.yref_higher_m)
+            fig = visualizeAREA(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
+                                Data.yref_higher_m)
             title = RoadTabConstants.visualize_title_AREA
         # VOLUME
         if index == RoadTabConstants.VOLUME:

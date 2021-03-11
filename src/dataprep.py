@@ -113,4 +113,6 @@ def dataConversion(data):
             lineStr_list.append(MultiLineString(lineStr_list1))
     rd_list = gpd.GeoDataFrame(rd_list, geometry=lineStr_list)
 
+    print("Conversion finished")
+
     return rd_list, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, output_path
