@@ -1,14 +1,13 @@
-import time, os
+import os
+import time
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from shapely import geometry
-import geopandas as gpd
-from shapely.geometry import Polygon, LineString, MultiLineString, Point
-from pyproj import Proj, transform
-import matplotlib.pyplot as plt
+from shapely.geometry import LineString, MultiLineString, Point
 import descartes
-import shutil
-from scipy.interpolate import griddata
 
 
 def generateLINE(data):
@@ -194,6 +193,7 @@ def geo_area(geo_m, wd):
     area = poly.area
     return poly, geo_m, p_l, area, ini_x, ini_y, coord_aer, len(p_l)
 
+
 # Visualizing AREA
 def visualizeAREA(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
     show_receptor = False
@@ -220,3 +220,146 @@ def visualizeAREA(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_hig
     plt.ylim(yref_lower_m, yref_higher_m)
     plt.savefig(output_path + "/GIS_area.jpg", bbox_inches='tight', dpi=600)
     return fig
+
+
+# Generate VOLUME
+def generateVOLUME(output_path, rd_list, max_vol, GISRdID):
+    # output path = path + fd_name
+
+    # max_vol = 10.0  # [5,7.9,80]
+    method = 'VOLUME'
+    print('')
+    print('Convert road GIS to VOLUME source..')
+    st = time.time()
+    rd_list['voln'] = 0
+    frame = []
+    for i, row in rd_list.iterrows():
+        rd_list.loc[i, 'voln'] = int(row['wd'] / max_vol) + (row['wd'] % max_vol > 0)
+        subwd = row['wd'] / rd_list.loc[i, 'voln']
+        sub_locid = [ii - (rd_list.loc[i, 'voln'] - 1) / 2.0 for ii in range(rd_list.loc[i, 'voln'])]
+        sub_loc = [ii * subwd for ii in sub_locid]
+        frame.append(geo_volume(rd_list.loc[i], sub_loc, subwd, GISRdID))
+    df = pd.DataFrame(pd.concat(frame))
+    df = df.reset_index(drop=True)
+    gdf = gpd.GeoDataFrame(df, geometry=df.geometry)
+    gdf['coord_aer'] = [str(round(xy.coords[0][0], 1)) + ' ' + str(round(xy.coords[0][1], 1)) for xy in
+                        gdf['geometry'].tolist()]
+    gdf['yinit'] = (gdf['subwd'] / 2.15).round(2)
+    gdf.to_csv(output_path + '/' + method + '_' + str(max_vol) + '.csv', index=False)
+    print("VOLUME generation done! exported to 'VOLUME_" + str(max_vol) + ".csv'.")
+    end = time.time()
+    print('Take about', round((end - st) / 60, 2), 'minutes.')
+    run_df = pd.DataFrame(columns=['method', 'links', 'sources', 'time'])
+    run_df.loc[0] = [method + '_' + str(max_vol), len(rd_list), len(gdf), round((end - st), 2)]
+
+    with open(os.path.dirname(output_path) + 'gen_time.csv', 'a') as f:
+        run_df.to_csv(os.path.dirname(output_path) + 'gen_time.csv', mode='a', index=False, header=f.tell() == 0)
+
+    # with open(path + 'gen_time.csv', 'a') as f:
+    #    run_df.to_csv(path + 'gen_time.csv', mode='a', index=False, header=f.tell() == 0)
+
+
+# This funcion is for VOLUME source
+def geo_volume(geo, sub_loc, subwd, GISRdID):
+    frame = []
+    if (type(geo.geometry) == LineString):
+        geo_m = geo.geometry
+        for loc in sub_loc:
+            geo_tmp = geo_m.parallel_offset(loc, 'left', join_style=2)
+            geo_len = geo_tmp.length
+            npts = int(geo_len / subwd)
+            if npts == 0:
+                npts = 1
+            avg_l = geo_len / npts
+            distances = np.arange(avg_l / 2, geo_len, avg_l)
+            points = [geo_tmp.interpolate(d) for d in distances]
+            rt_pt = gpd.GeoDataFrame(columns=('linkID', 'geometry'))
+            rt_pt['geometry'] = points
+            rt_pt['linkID'] = geo.linkID
+            frame.append(rt_pt)
+    else:
+        print(type(geo.geometry), geo['linkID'], ' is multistrings, further assigning IDs')
+        for subgeo in geo.geometry:
+            geo_m = subgeo
+            for loc in sub_loc:
+                geo_tmp = geo_m.parallel_offset(loc, 'left', join_style=2)
+                geo_len = geo_tmp.length
+                npts = int(geo_len / subwd)
+                if npts == 0:
+                    npts = 1
+                avg_l = geo_len / npts
+                distances = np.arange(avg_l / 2, geo_len, avg_l)
+                points = [geo_tmp.interpolate(d) for d in distances]
+                rt_pt = gpd.GeoDataFrame(columns=('linkID', 'geometry'))
+                rt_pt['geometry'] = points
+                rt_pt['linkID'] = geo.linkID
+                frame.append(rt_pt)
+    rt_df = pd.DataFrame(pd.concat(frame))
+    rt_df['NO'] = range(len(rt_df))
+    rt_df['linkID_new'] = rt_df['linkID'].astype(str) + '__' + rt_df["NO"].astype(str)
+    rt_gdf = gpd.GeoDataFrame(rt_df, geometry=rt_df.geometry)
+    # rt_gdf['EM_AER'] = geo.EM_RATE/1609.344/3600 * geo_l/n
+    rt_gdf['nn'] = len(rt_df)
+    rt_gdf['subwd'] = subwd
+    rt_gdf[GISRdID] = geo[GISRdID]
+    return rt_gdf[[GISRdID, 'linkID', 'linkID_new', 'geometry', 'nn', 'subwd']]
+
+# Visualize VOLUME
+def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
+    print("start visualize VOLUME Max size = " + str(max_vol))
+    # VOLUME visualization
+
+    st = time.time()
+    gdf = pd.read_csv(output_path + '/VOLUME_' + str(max_vol) + '.csv')
+    gdf['geometry'] = gdf.apply(lambda row: Point(float(xx) for xx in row['coord_aer'].split(' ')), axis=1)
+    gdf = gpd.GeoDataFrame(gdf, geometry=gdf.geometry)
+    fig, ax = plt.subplots()
+    print("Point 1")
+    buffer_1 = gpd.GeoDataFrame(geometry=gdf.apply(lambda x: x.geometry.buffer(x['yinit'] * 2.15 + 0.99),
+                                                   axis=1))  # hide if using more accurate graph option
+    buffer_1['dissol'] = 1  # hide if using more accurate graph option
+    buffer_2 = gpd.GeoDataFrame(
+        buffer_1.dissolve(by='dissol').reset_index(drop=True))  # hide if using more accurate graph option
+    buffer_2.plot(linewidth=0.5, edgecolor='orange', facecolor="none",
+                  ax=ax)  # hide if using more accurate graph option
+    buffer_2.plot(color='orange', alpha=0.1, ax=ax)  # hide if using more accurate graph option
+    buffer_1 = gpd.GeoDataFrame(geometry=gdf.apply(lambda x: x.geometry.buffer(x['subwd'] / 2), axis=1))
+    buffer_1['dissol'] = 1
+    buffer_2 = gpd.GeoDataFrame(buffer_1.dissolve(by='dissol').reset_index(drop=True))
+    # buffer_2.plot(linewidth = 0.3,edgecolor='blue',facecolor="none",ax=ax) # hide if using more accurate graph option
+    print("Point 2")
+    buffer_2.plot(alpha=0.3, ax=ax)
+    gdf.plot(color='black', markersize=1, ax=ax)
+    plt.title("AERMOD Volume Geometry, MAX Cell: " + str(max_vol) + ' m')
+    plt.axis('scaled')
+    plt.xlabel('meter')
+    plt.ylabel('meter')
+    # more precise info
+    print("Point 3")
+    precise_inf = False
+    if precise_inf:
+        for i, row in gdf.iterrows():
+            circle_ed = plt.Circle(row['geometry'].coords[:][0], radius=row['subwd'] / 2, linewidth=0.3,
+                                   edgecolor='blue',
+                                   facecolor="none")
+            # circle_ex = plt.Circle(row['geometry'].coords[:][0],radius = row['yinit']*2.15+0.99,fc = 'none',linewidth = 0.5, linestyle = 'dashed', edgecolor='orange')
+            # plt.gca().add_patch(circle_ex)
+            plt.gca().add_patch(circle_ed)
+    rd_geo = pd.read_csv(output_path + '/AREA.csv')
+    rd_geo['geometry'] = rd_geo.apply(lambda row: add_polygon_from_poly(row), axis=1)
+    rd_geo = gpd.GeoDataFrame(rd_geo, geometry=rd_geo.geometry)
+    rd_geo.plot(ax=ax, edgecolor='black', linewidth=0.3, alpha=0.5, facecolor="none", zorder=2)
+    plt.xlim(xref_left_m, xref_right_m)
+    plt.ylim(yref_lower_m, yref_higher_m)
+    plt.savefig(output_path + "/GIS_volume_" + str(max_vol) + ".jpg", bbox_inches='tight', dpi=600)
+    end = time.time()
+    print('Take about', round((end - st) / 60, 2), 'minutes.')
+
+    return fig
+
+# Function for visualizing VOLUME
+def add_polygon_from_poly(row):
+    xxxx = row['poly'].split('((')[1].split('))')[0].split(', ')
+    x = [float(xx.split(' ')[0]) for xx in xxxx]
+    y = [float(yy.split(' ')[1]) for yy in xxxx]
+    return geometry.Polygon((x[j], y[j]) for j in range(len(x)))

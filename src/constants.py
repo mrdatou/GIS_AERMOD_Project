@@ -5,9 +5,9 @@ class RoadTabConstants():
     road_vol = "VOLUME is defined by the coordinates of the source center and cell size (d)"
 
     # Graphic example image paths
-    lineGrapPath = 'image/0120.jpg'
-    areaGrapPath = '../img/0120.jpg'
-    volGrapPath = '../img/0120.jpg'
+    lineGrapPath = 'img/line_example.png'
+    areaGrapPath = 'img/0120.jpg'
+    volGrapPath = 'img/0120.jpg'
 
     # Columns lists
     # LINE
@@ -54,3 +54,4 @@ class RoadTabConstants():
     # Titlle of popup window for visualizing data
     visualize_title_LINE = "Visualize LINE.csv"
     visualize_title_AREA = "Visualize AREA.csv"
+    visualize_title_VOLUME = "Visualize VOLUME.csv"

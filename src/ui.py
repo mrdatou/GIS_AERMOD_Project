@@ -7,10 +7,10 @@ from PIL import Image, ImageTk
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from src.GISPlotWindow import GISplotWindow
-from src.constants import RoadTabConstants
-from src.dataprep import GISextract, dataConversion
-from src.generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA
+from GISPlotWindow import GISplotWindow
+from constants import RoadTabConstants
+from dataprep import GISextract, dataConversion
+from generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA, generateVOLUME, visualizeVOLUME
 
 
 # Class of variables which are shared with multiple frames
@@ -45,6 +45,9 @@ class Data:
     xref_right_m = None
     yref_lower_m = None
     yref_higher_m = None
+
+    #
+    maxsize_var = None
 
 
 # Data Tab class inherit Data class to share data with other tabs
@@ -461,23 +464,23 @@ class RoadTab(tk.Frame, Data):
         # Inner Frame
         frame_InLine = tk.Frame(labelFrame_OutLine, highlightbackground="red", highlightcolor="black",
                                 highlightthickness=1, width=100, height=100, bd=0)
-        frame_InLine.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        frame_InLine.grid(row=0, column=0, sticky=tk.W + tk.E)
 
         str = RoadTabConstants.road_line
         label_emp1 = tk.Label(frame_InLine, text=str, wraplength=150)
-        label_emp1.grid(row=0, column=0)
+        label_emp1.grid(row=0, column=0, sticky=tk.W+tk.E)
 
         # Place LIne's graphic example button
         self.button_lineExample = ttk.Button(frame_InLine)
         self.button_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
                                           command=lambda: repr(self.btnGraphicExample(RoadTabConstants.lineGrapPath)))
-        self.button_lineExample.grid(row=1, column=0)
+        self.button_lineExample.grid(row=1, column=0, sticky=tk.W+tk.E)
 
         # Place LINE columns button
         self.button_lineCols = ttk.Button(frame_InLine)
         self.button_lineCols.configure(text="LINE columns", padding=10, default=tk.ACTIVE,
                                        command=lambda: repr(self.btnCol(0)))
-        self.button_lineCols.grid(row=2, column=0)
+        self.button_lineCols.grid(row=2, column=0, sticky=tk.W+tk.E)
 
         # Place Generate Line button
         self.button_generateLine = ttk.Button(labelFrame_OutLine)
@@ -541,23 +544,23 @@ class RoadTab(tk.Frame, Data):
         # Inner Frame
         frame_InVol = tk.Frame(labelFrame_OutVol, highlightbackground="red", highlightcolor="black",
                                highlightthickness=1, width=100, height=100, bd=0)
-        frame_InVol.grid(row=0, column=0, columnspan=2, sticky=tk.W + tk.E + tk.N + tk.S)
+        frame_InVol.grid(row=0, column=0, columnspan=2, sticky=tk.W+tk.E)
 
         str = RoadTabConstants.road_vol
-        label_emp2 = tk.Label(frame_InVol, text=str, wraplength=150)
-        label_emp2.grid(row=0, column=0)
+        label_emp3 = tk.Label(frame_InVol, text=str, wraplength=250)
+        label_emp3.grid(row=0, column=0, sticky=tk.W+tk.E)
 
         # Place VOLUME's graphic example button
         btn_volExample = ttk.Button(frame_InVol)
         btn_volExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
-                                 command=lambda: repr(self.btnGraphicExample(RoadTabConstants.areaGrapPath)))
-        btn_volExample.grid(row=1, column=0)
+                                 command=lambda: repr(self.btnGraphicExample(RoadTabConstants.volGrapPath)))
+        btn_volExample.grid(row=1, column=0, columnspan=2)
 
         # Place Area columns button
         btn_volCols = ttk.Button(frame_InVol)
         btn_volCols.configure(text="VOLUME columns", padding=10, default=tk.ACTIVE,
                               command=lambda: repr(self.btnCol(2)))
-        btn_volCols.grid(row=2, column=0)
+        btn_volCols.grid(row=2, column=0, columnspan=2)
 
         # Put textbox for max size
         label_maxSize = tk.Label(labelFrame_OutVol, text="Max Size (m) Should <= 8 m")
@@ -568,16 +571,16 @@ class RoadTab(tk.Frame, Data):
         self.txt_maxsize.grid(row=1, column=1, sticky=tk.W)
 
         # Place Generate VOLUME button
-        self.btn_generateArea = ttk.Button(labelFrame_OutVol)
-        self.btn_generateArea.configure(text="Generate VOLUME", padding=10, default=tk.ACTIVE,
-                                        command=lambda: repr(self.btnGenerate(2)))
-        self.btn_generateArea.grid(row=1, column=0, columnspan=2)
+        self.btn_generateVol = ttk.Button(labelFrame_OutVol)
+        self.btn_generateVol.configure(text="Generate VOLUME", padding=10, default=tk.ACTIVE,
+                                        command=lambda: repr(self.btnGenerate(RoadTabConstants.VOLUME)))
+        self.btn_generateVol.grid(row=2, column=0, columnspan=2, sticky=tk.S)
 
         # Place Visualize VOLUME button
-        self.btn_visualizeArea = ttk.Button(labelFrame_OutVol)
-        self.btn_visualizeArea.configure(text="Visualize VOLUME", padding=10, default=tk.ACTIVE,
-                                         command=lambda: repr(self.btnVisualize(2)))
-        self.btn_visualizeArea.grid(row=2, column=0, columnspan=2)
+        self.btn_visualizeVol = ttk.Button(labelFrame_OutVol)
+        self.btn_visualizeVol.configure(text="Visualize VOLUME", padding=10, default=tk.ACTIVE,
+                                         command=lambda: repr(self.btnVisualize(RoadTabConstants.VOLUME)))
+        self.btn_visualizeVol.grid(row=3, column=0, columnspan=2, sticky=tk.S)
 
     # Control graphic example button (specifying image path)
     def btnGraphicExample(self, imgPath):
@@ -585,12 +588,17 @@ class RoadTab(tk.Frame, Data):
         # Open pop up window
         graphicWin = tk.Toplevel(self)
 
-        jpg = Image.open(imgPath)
-        my_image = ImageTk.PhotoImage(jpg)
-        # my_image = tk.PhotoImage(file=imgPath)
+        print(os.path.isfile(imgPath))
+        print(imgPath)
 
-        canvas = tk.Canvas(graphicWin, width=300, height=300)
-        canvas.grid()
+
+        #my_image = ImageTk.PhotoImage(file=imgPath)
+
+        canvas = tk.Canvas(graphicWin, width=300, height=300, bg='skyblue')
+        canvas.pack(expand=True, fill='both')
+
+        jpg = Image.open(imgPath)
+        my_image = ImageTk.PhotoImage(jpg, master=graphicWin)
         canvas.create_image(0, 0, anchor=tk.NW, image=my_image)
 
         # tk.Grid.rowconfigure(graphicWin, 0, weight=1)
@@ -622,16 +630,16 @@ class RoadTab(tk.Frame, Data):
     def btnGenerate(self, index):
         # Line
         if index == RoadTabConstants.LINE:
-            self.generateLine()
+            self.generateLINE()
         # Area
         if index == RoadTabConstants.AREA:
             self.generateAREA()
         # Volume
         if index == RoadTabConstants.VOLUME:
-            pass
+            self.generateVOLUME()
 
     # Generate LINE
-    def generateLine(self):
+    def generateLINE(self):
         # Generate LINE.csv (Argument: converted GIS data, Road ID column, Road Type column)
         generateLINE(Data)
 
@@ -641,7 +649,9 @@ class RoadTab(tk.Frame, Data):
 
     # Generate VOLUME
     def generateVOLUME(self):
-        pass
+        # Transform maxsize var to float
+        Data.maxsize_var = float(self.txt_maxsize_var.get())
+        generateVOLUME(Data.output_path, Data.rd_list, Data.maxsize_var, Data.roadID)
 
     # Control Visualize button
     def btnVisualize(self, index):
@@ -657,18 +667,21 @@ class RoadTab(tk.Frame, Data):
             title = RoadTabConstants.visualize_title_AREA
         # VOLUME
         if index == RoadTabConstants.VOLUME:
-            pass
+            fig = visualizeVOLUME(Data.output_path, Data.maxsize_var, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
+                                Data.yref_higher_m)
+            title = RoadTabConstants.visualize_title_VOLUME
 
         # Open pop up window to show the output plot
         visualizeWindow = tk.Toplevel(self)
         visualizeWindow.title(title)
         canvas = FigureCanvasTkAgg(fig, master=visualizeWindow)
-        canvas.get_tk_widget().grid(row=0, column=0, rowspan=4, sticky=tk.N + tk.S + tk.W + tk.E)
-        toolbar = NavigationToolbar2Tk(canvas, visualizeWindow, pack_toolbar=False)
+        canvas.get_tk_widget().pack(expand=True, fill="both")
+        toolbar = NavigationToolbar2Tk(canvas, visualizeWindow)
         toolbar.update()
-        toolbar.grid(row=4, column=0)
-        tk.Grid.rowconfigure(visualizeWindow, 0, weight=1)
-        tk.Grid.columnconfigure(visualizeWindow, 0, weight=1)
+        toolbar.pack(expand=True, fill="both")
+        #toolbar.grid(row=4, column=0)
+        #tk.Grid.rowconfigure(visualizeWindow, 0, weight=1)
+        #tk.Grid.columnconfigure(visualizeWindow, 0, weight=1)
 
 
 # Main window class
