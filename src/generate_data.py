@@ -314,7 +314,6 @@ def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_
     gdf['geometry'] = gdf.apply(lambda row: Point(float(xx) for xx in row['coord_aer'].split(' ')), axis=1)
     gdf = gpd.GeoDataFrame(gdf, geometry=gdf.geometry)
     fig, ax = plt.subplots()
-    print("Point 1")
     buffer_1 = gpd.GeoDataFrame(geometry=gdf.apply(lambda x: x.geometry.buffer(x['yinit'] * 2.15 + 0.99),
                                                    axis=1))  # hide if using more accurate graph option
     buffer_1['dissol'] = 1  # hide if using more accurate graph option
@@ -327,7 +326,6 @@ def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_
     buffer_1['dissol'] = 1
     buffer_2 = gpd.GeoDataFrame(buffer_1.dissolve(by='dissol').reset_index(drop=True))
     # buffer_2.plot(linewidth = 0.3,edgecolor='blue',facecolor="none",ax=ax) # hide if using more accurate graph option
-    print("Point 2")
     buffer_2.plot(alpha=0.3, ax=ax)
     gdf.plot(color='black', markersize=1, ax=ax)
     plt.title("AERMOD Volume Geometry, MAX Cell: " + str(max_vol) + ' m')
@@ -335,7 +333,6 @@ def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_
     plt.xlabel('meter')
     plt.ylabel('meter')
     # more precise info
-    print("Point 3")
     precise_inf = False
     if precise_inf:
         for i, row in gdf.iterrows():

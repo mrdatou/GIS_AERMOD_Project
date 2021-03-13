@@ -86,21 +86,21 @@ class GISplotWindow(tk.Frame):
         # Draw Boundary Button
         button_drawBoundary = ttk.Button(self.master)
         button_drawBoundary.configure(text="Draw boundary", padding=10, default=tk.ACTIVE, command=self.btnDrawBoundary)
-        button_drawBoundary.pack(anchor=tk.NE)
+        button_drawBoundary.pack(side=tk.LEFT, anchor=tk.N)
         #button_drawBoundary.grid(row=0, column=1, sticky=tk.W + tk.E)
 
         # Locate reference point button
         button_refPoint = ttk.Button(self.master)
         button_refPoint.configure(text="Draw reference point", padding=10, default=tk.ACTIVE,
                                   command=self.btnLocateRefPoint)
-        button_refPoint.pack(anchor=tk.NE)
+        button_refPoint.pack(side=tk.LEFT)
         #button_refPoint.grid(row=1, column=1)
 
         # Confirm & close button
         button_confirmClose = ttk.Button(self.master)
         button_confirmClose.configure(text="Confirm & close", padding=10, default=tk.ACTIVE,
                                       command=self.btnConfirmClose)
-        button_confirmClose.pack(anchor=tk.NE)
+        button_confirmClose.pack(side=tk.LEFT, anchor=tk.S)
         #button_confirmClose.grid(row=4, column=1, sticky=tk.W + tk.E)
 
     # Define Draw boundary button function

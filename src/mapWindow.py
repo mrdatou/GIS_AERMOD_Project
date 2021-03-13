@@ -8,7 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.widgets import RectangleSelector
 
 
-class MapWindow(tk.Frame):
+class GISplotWindow(tk.Frame):
     def __init__(self, rd_list, master=None):
         super().__init__(master)
         self.master = master
@@ -62,6 +62,8 @@ class MapWindow(tk.Frame):
 
             if self.btnRefPointFlag:
                 point.set_data([event.xdata], [event.ydata])
+                self.xRef = event.xdata
+                self.yRef = event.ydata
                 fig.canvas.draw_idle()
 
         mouseButtonPressed.RS = RectangleSelector(ax, line_select_callback,
@@ -111,7 +113,14 @@ class MapWindow(tk.Frame):
 
     # Define Confirm and Close function
     def btnConfirmClose(self):
-        pass
+        # Pass boundary and reference point values to the Data tab
+        self.master.txt_xRef_var.set(str(self.xRef))
+
+        print(self.master.txt_xRef_var.get())
+
+        # Close this window
+        self.destroy()
+        self.update()
 
     # 　If mouse button pressed
     def press(self, event):

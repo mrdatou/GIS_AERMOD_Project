@@ -55,3 +55,16 @@ class RoadTabConstants():
     visualize_title_LINE = "Visualize LINE.csv"
     visualize_title_AREA = "Visualize AREA.csv"
     visualize_title_VOLUME = "Visualize VOLUME.csv"
+
+
+# Constant values for Receptors Tab
+class ReceptorsTabConstants():
+
+    infoList = ["There are two types of receptors that can be automatically generated.",
+                "1. Near-road receptors: receptors around roadways. Define number of layers and space intervals by uploading csv or using table:",
+                "• F_LTYPE: road type matched in GIS",
+                "• LAYER: layer ID (1,2,3,..)",
+                "• DISTANCE: distance (m) of layer from road edge (usually the closest layer = 5 m)",
+                "• INTERVAL: space intervals within each layer",
+                "2. Gridded receptors with space intervals specified on the right.",
+                "3. Elevation of receptors (m) above road ground, 1.5 m recommended."]
