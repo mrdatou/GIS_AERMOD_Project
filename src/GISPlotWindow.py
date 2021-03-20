@@ -7,6 +7,7 @@ from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.widgets import RectangleSelector
 
+
 # Locate boundary and reference point window's class
 class GISplotWindow(tk.Frame):
     def __init__(self, rd_list, master=None):
@@ -39,7 +40,8 @@ class GISplotWindow(tk.Frame):
 
         self.canvas = FigureCanvasTkAgg(fig, master=self.master)
         self.canvas.get_tk_widget().pack(anchor=tk.NW)
-        #self.canvas.get_tk_widget().grid(row=0, column=0, rowspan=4, sticky=tk.N + tk.S + tk.W + tk.E)
+
+        # self.canvas.get_tk_widget().grid(row=0, column=0, rowspan=4, sticky=tk.N + tk.S + tk.W + tk.E)
 
         # Control rectangle info
         def line_select_callback(eclick, erelease):
@@ -76,7 +78,7 @@ class GISplotWindow(tk.Frame):
         toolbar = NavigationToolbar2Tk(self.canvas, self.master)
         toolbar.update()
         toolbar.pack(anchor=tk.NW)
-        #toolbar.grid(row=4, column=0)
+        # toolbar.grid(row=4, column=0)
 
         self.canvas.mpl_connect('button_press_event', mouseButtonPressed)
         self.canvas.mpl_connect("button_release_event", self.release)
@@ -87,21 +89,21 @@ class GISplotWindow(tk.Frame):
         button_drawBoundary = ttk.Button(self.master)
         button_drawBoundary.configure(text="Draw boundary", padding=10, default=tk.ACTIVE, command=self.btnDrawBoundary)
         button_drawBoundary.pack(side=tk.LEFT, anchor=tk.N)
-        #button_drawBoundary.grid(row=0, column=1, sticky=tk.W + tk.E)
+        # button_drawBoundary.grid(row=0, column=1, sticky=tk.W + tk.E)
 
         # Locate reference point button
         button_refPoint = ttk.Button(self.master)
         button_refPoint.configure(text="Draw reference point", padding=10, default=tk.ACTIVE,
                                   command=self.btnLocateRefPoint)
         button_refPoint.pack(side=tk.LEFT)
-        #button_refPoint.grid(row=1, column=1)
+        # button_refPoint.grid(row=1, column=1)
 
         # Confirm & close button
         button_confirmClose = ttk.Button(self.master)
         button_confirmClose.configure(text="Confirm & close", padding=10, default=tk.ACTIVE,
                                       command=self.btnConfirmClose)
         button_confirmClose.pack(side=tk.LEFT, anchor=tk.S)
-        #button_confirmClose.grid(row=4, column=1, sticky=tk.W + tk.E)
+        # button_confirmClose.grid(row=4, column=1, sticky=tk.W + tk.E)
 
     # Define Draw boundary button function
     def btnDrawBoundary(self):

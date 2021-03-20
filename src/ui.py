@@ -4,6 +4,10 @@ import tkinter.ttk as ttk
 import webbrowser
 from tkinter import filedialog
 
+import numpy as np
+import tksheet
+import pandas as pd
+
 from PIL import Image, ImageTk
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -11,7 +15,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from GISPlotWindow import GISplotWindow
 from constants import RoadTabConstants, ReceptorsTabConstants
 from dataprep import GISextract, dataConversion
-from generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA, generateVOLUME, visualizeVOLUME
+from generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA, generateVOLUME, visualizeVOLUME, \
+    generateReceptors, visualizeReceptors
 
 
 # Class of variables which are shared with multiple frames
@@ -49,6 +54,10 @@ class Data:
 
     # Maxsize for VOLUME
     maxsize_var = None
+
+    # Receptor tab
+    interval = None
+    elevation = None
 
 
 # Data Tab class inherit Data class to share data with other tabs
@@ -221,8 +230,6 @@ class DataTab(tk.Frame, Data):
         self.txt_toproj = tk.Entry(self.labelFrame_Projection, textvariable=self.txt_toproj_var, width=4)
         self.txt_toproj.grid(row=1, column=1)
 
-
-
         # Control ESPG text form: limit length = 4
         def limitESPGinput(entry, txtbox):
             if len(entry.get()) > 4:
@@ -237,41 +244,45 @@ class DataTab(tk.Frame, Data):
         # Meter checkbox
         self.bln_m = tk.BooleanVar()
         self.bln_m.set(False)
-        self.chk_m = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_m, command=self.controlChkUnit,
+        self.chk_m = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_m, command=self.controlChkM,
                                     text="m")
         self.chk_m.grid(row=2, column=1)
 
         # Feet checkbox
         self.bln_f = tk.BooleanVar()
         self.bln_f.set(False)
-        self.chk_f = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_f, command=self.controlChkUnit,
+        self.chk_f = tk.Checkbutton(self.labelFrame_Projection, variable=self.bln_f, command=self.controlChkF,
                                     text="ft")
         self.chk_f.grid(row=3, column=1)
 
         # ESPG resources
-        tk.Label(self.labelFrame_Projection, text="Note EPSG code can be found in:", wraplength=200).grid(row=4, column=0, columnspan=2)
+        tk.Label(self.labelFrame_Projection, text="Note EPSG code can be found in:", wraplength=200).grid(row=4,
+                                                                                                          column=0,
+                                                                                                          columnspan=2)
 
         def callback(event):
             webbrowser.open_new(event.widget.cget("text"))
 
-        link = tk.Label(self.labelFrame_Projection, text=r"https://spatialreference.org/ref/epsg/", wraplength=200, fg="blue", cursor="hand2")
+        link = tk.Label(self.labelFrame_Projection, text=r"https://spatialreference.org/ref/epsg/", wraplength=200,
+                        fg="blue", cursor="hand2")
         link.grid(row=5, column=0, columnspan=2)
         link.bind("<Button-1>", callback)
 
-    # Control meter feet checkbox
-    def controlChkUnit(self):
-        # If m or f checked, disable the other
-        if self.bln_m.get() == True and self.bln_f.get() == False:
-            # If Meter is selected
-            self.chk_m.config(state=tk.DISABLED)
-            self.chk_f.config(state=tk.NORMAL)
-        elif self.bln_f.get() == True and self.bln_m.get() == False:
-            # If Feet is selected
-            self.chk_f.config(state=tk.DISABLED)
-            self.chk_m.config(state=tk.NORMAL)
-        elif self.bln_m.get() == False and self.bln_f.get() == False:
-            self.chk_m.config(state=tk.NORMAL)
-            self.chk_f.config(state=tk.NORMAL)
+    # Control meter checkbox
+    def controlChkM(self):
+        self.bln_m.set(True)
+        self.bln_f.set(False)
+
+        self.chk_f.config(state=tk.NORMAL)
+        self.chk_m.config(state=tk.DISABLED)
+
+    # Control feet checkbox
+    def controlChkF(self):
+        self.bln_f.set(True)
+        self.bln_m.set(False)
+
+        self.chk_m.config(state=tk.NORMAL)
+        self.chk_f.config(state=tk.DISABLED)
 
     # Create Boundary setting frame
     def createBoundarySetting(self):
@@ -287,65 +298,55 @@ class DataTab(tk.Frame, Data):
         button_locateGraph.grid(row=0, column=7, sticky=tk.E)
 
         # y high text box
-        label_yHigh = tk.Label(labelFrame_Boundary, text="Y high")
-        label_yHigh.grid(row=0, column=3, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="Y high").grid(row=0, column=3, sticky=tk.E)
 
         self.txt_yHigh_var = tk.StringVar()
         txt_yHigh = tk.Entry(labelFrame_Boundary, textvariable=self.txt_yHigh_var, width=10)
         txt_yHigh.grid(row=0, column=4, sticky=tk.W)
 
         # x left text box
-        label_xLeft = tk.Label(labelFrame_Boundary, text="X left")
-        label_xLeft.grid(row=2, column=0, rowspan=2, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="X left").grid(row=2, column=0, rowspan=2, sticky=tk.E)
 
         self.txt_xLeft_var = tk.StringVar()
         txt_xLeft = tk.Entry(labelFrame_Boundary, textvariable=self.txt_xLeft_var, width=10)
         txt_xLeft.grid(row=2, column=1, rowspan=2, sticky=tk.W)
 
         # X right text box
-        label_xRight = tk.Label(labelFrame_Boundary, text="X right")
-        label_xRight.grid(row=2, column=6, rowspan=2, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="X right").grid(row=2, column=6, rowspan=2, sticky=tk.E)
 
         self.txt_xRight_var = tk.StringVar()
         txt_xRight = tk.Entry(labelFrame_Boundary, textvariable=self.txt_xRight_var, width=10)
         txt_xRight.grid(row=2, column=7, rowspan=2, sticky=tk.W)
 
         # Y low text box
-        label_yLow = tk.Label(labelFrame_Boundary, text="Y low")
-        label_yLow.grid(row=5, column=3, rowspan=2, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="Y low").grid(row=5, column=3, rowspan=2, sticky=tk.E)
 
         self.txt_yLow_var = tk.StringVar()
         txt_yLow = tk.Entry(labelFrame_Boundary, textvariable=self.txt_yLow_var, width=10)
         txt_yLow.grid(row=5, column=4, rowspan=2, sticky=tk.W)
 
         # Reference point x text box
-        label_xRef = tk.Label(labelFrame_Boundary, text="Reference x")
-        label_xRef.grid(row=2, column=3, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="Reference x").grid(row=2, column=3, sticky=tk.E)
 
         self.txt_xRef_var = tk.StringVar()
         txt_xRef = tk.Entry(labelFrame_Boundary, textvariable=self.txt_xRef_var, width=10)
         txt_xRef.grid(row=2, column=4, sticky=tk.W)
 
         # Reference point y text box
-        label_yRef = tk.Label(labelFrame_Boundary, text="Reference y")
-        label_yRef.grid(row=3, column=3, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="Reference y").grid(row=3, column=3, sticky=tk.E)
 
         self.txt_yRef_var = tk.StringVar()
         txt_yRef = tk.Entry(labelFrame_Boundary, textvariable=self.txt_yRef_var, width=10)
         txt_yRef.grid(row=3, column=4, sticky=tk.W)
 
         # Empty labels
-        label_emp1 = tk.Label(labelFrame_Boundary, text="   ")
-        label_emp1.grid(row=1, column=0, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="   ").grid(row=1, column=0, sticky=tk.E)
 
-        label_emp2 = tk.Label(labelFrame_Boundary, text="   ")
-        label_emp2.grid(row=0, column=2, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="   ").grid(row=0, column=2, sticky=tk.E)
 
-        label_emp3 = tk.Label(labelFrame_Boundary, text="   ")
-        label_emp3.grid(row=0, column=5, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="   ").grid(row=0, column=5, sticky=tk.E)
 
-        label_emp4 = tk.Label(labelFrame_Boundary, text="   ")
-        label_emp4.grid(row=4, column=0, sticky=tk.E)
+        tk.Label(labelFrame_Boundary, text="   ").grid(row=4, column=0, sticky=tk.E)
 
     # Open GIS plot window
     def btnLocateGraph(self):
@@ -375,47 +376,49 @@ class DataTab(tk.Frame, Data):
     # Verify inputs button
     def btnVerify(self):
         # Check input values
-        if self.checkErrBtnVerify():
+        if self.checkInputErr():
             self.passInputToMain()
 
     # Check input values when verify inputs button pressed
-    def checkErrBtnVerify(self):
+    def checkInputErr(self):
 
         # Error Flag
-        err = True
+        errFlag = True
 
         # Error message string
-        errStr = ""
+        errMsg = ""
 
         # Check if columns are chosen
         if self.combo_roadID.get() == "" or self.combo_roadTp.get() == "" or self.combo_numLane.get() == "" or self.combo_laneWid.get() == "" or self.combo_geom.get() == "":
-            errStr += "Column value is not selected"
-            err = False
+            errMsg += "Column value is not selected"
+            errFlag = False
 
         if self.txt_shoulder_var.get() == "":
-            errStr += "\n No shoulder value"
-            err = False
+            errMsg += "\n No shoulder value"
+            errFlag = False
         else:
             shoulder = float(self.txt_shoulder_var.get())
-            if shoulder > 8:
-                tk.messagebox.showwarning('showwarning', "Shoulder is more than 8")
+            if shoulder < 0:
+                # Give warning if shoulder is greater than 8
+                errMsg += "\n Shoulder value is negative"
+                errFlag = False
 
         if self.txt_fromproj_var.get() == "" or self.txt_toproj_var.get() == "":
-            errStr += "\n ESPG value is missed"
-            err = False
+            errMsg += "\n ESPG value is missed"
+            errFlag = False
 
         if self.bln_f is False and self.bln_m is False:
-            errStr += "\n No unit selected"
-            err = False
+            errMsg += "\n No unit selected"
+            errFlag = False
 
         if self.txt_xRef_var.get() == "" or self.txt_yRef_var.get() == "" or self.txt_yHigh_var.get() == "" or self.txt_yLow_var.get() == "" or self.txt_xLeft_var.get() == "" or self.txt_xRight_var.get() == "":
-            errStr += "\n Boundary and Reference point missed"
-            err = False
+            errMsg += "\n Boundary and Reference point missed"
+            errFlag = False
 
-        if err is not True:
-            tk.messagebox.showerror('showerror', errStr)
+        if errFlag is not True:
+            tk.messagebox.showerror('showerror', errMsg)
 
-        return err
+        return errFlag
 
     # Pass Data tab input to Main Window variables
     def passInputToMain(self):
@@ -458,9 +461,6 @@ class RoadTab(tk.Frame, Data):
         super().__init__(master)
         self.grid(row=0, column=0)
 
-        # GIS data
-        self.rd_list = None
-
         # Create Line frame
         self.createLineFrame()
 
@@ -472,30 +472,30 @@ class RoadTab(tk.Frame, Data):
 
     def createLineFrame(self):
         # Outer Label Frame
-        labelFrame_OutLine = tk.LabelFrame(self, text="Line (LINE, RLINE, RLINEXT)", width=200, height=200,
+        labelFrame_OutLine = tk.LabelFrame(self, text="Line (LINE, RLINE, RLINEXT)", width=10, height=20,
                                            font=(None, 15, "bold"))
         labelFrame_OutLine.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
         # Inner Frame
         frame_InLine = tk.Frame(labelFrame_OutLine, highlightbackground="red", highlightcolor="black",
                                 highlightthickness=1, width=100, height=100, bd=0)
-        frame_InLine.grid(row=0, column=0, sticky=tk.W + tk.E)
+        frame_InLine.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
         str = RoadTabConstants.road_line
-        label_emp1 = tk.Label(frame_InLine, text=str, wraplength=150)
-        label_emp1.grid(row=0, column=0, sticky=tk.W + tk.E)
+        label_emp1 = tk.Label(frame_InLine, text=str, wraplength=200)
+        label_emp1.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
 
         # Place LIne's graphic example button
         self.button_lineExample = ttk.Button(frame_InLine)
         self.button_lineExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE,
                                           command=lambda: repr(self.btnGraphicExample(RoadTabConstants.lineGrapPath)))
-        self.button_lineExample.grid(row=1, column=0, sticky=tk.W + tk.E)
+        self.button_lineExample.grid(row=1, column=0)
 
         # Place LINE columns button
         self.button_lineCols = ttk.Button(frame_InLine)
         self.button_lineCols.configure(text="LINE columns", padding=10, default=tk.ACTIVE,
                                        command=lambda: repr(self.btnCol(0)))
-        self.button_lineCols.grid(row=2, column=0, sticky=tk.W + tk.E)
+        self.button_lineCols.grid(row=2, column=0)
 
         # Place Generate Line button
         self.button_generateLine = ttk.Button(labelFrame_OutLine)
@@ -549,7 +549,7 @@ class RoadTab(tk.Frame, Data):
                                          command=lambda: repr(self.btnVisualize(RoadTabConstants.AREA)))
         self.btn_visualizeArea.grid(row=2, column=0)
 
-    # Create AREA frame
+    # Create VOLUME frame
     def createVolFrame(self):
         # Outer Label Frame
         labelFrame_OutVol = tk.LabelFrame(self, text="VOLUME", width=400, height=200,
@@ -578,12 +578,11 @@ class RoadTab(tk.Frame, Data):
         btn_volCols.grid(row=2, column=0, columnspan=2)
 
         # Put textbox for max size
-        label_maxSize = tk.Label(labelFrame_OutVol, text="Max Size (m) Should <= 8 m")
-        label_maxSize.grid(row=1, column=0)
+        tk.Label(labelFrame_OutVol, text="Max Size (m) Should <= 8 m").grid(row=1, column=0, sticky=tk.S)
 
         self.txt_maxsize_var = tk.StringVar()
         self.txt_maxsize = tk.Entry(labelFrame_OutVol, textvariable=self.txt_maxsize_var, width=10)
-        self.txt_maxsize.grid(row=1, column=1, sticky=tk.W)
+        self.txt_maxsize.grid(row=1, column=1, sticky=tk.S)
 
         # Place Generate VOLUME button
         self.btn_generateVol = ttk.Button(labelFrame_OutVol)
@@ -663,8 +662,22 @@ class RoadTab(tk.Frame, Data):
 
     # Generate VOLUME
     def generateVOLUME(self):
-        # Transform maxsize var to float
-        Data.maxsize_var = float(self.txt_maxsize_var.get())
+
+        # If the maxsize value is null
+        if self.txt_maxsize_var.get() == "":
+            tk.messagebox.showerror('showerror', "No max size input")
+            print("aaa")
+            return
+        else:
+            # Transform maxsize var to float
+            maxsize = float(self.txt_maxsize_var.get())
+            if maxsize < 0:
+                tk.messagebox.showerror('showerror', "Max size is negative")
+                return
+            elif maxsize > 8:
+                tk.messagebox.showwarning('showwarning', "Max size is greater than 8")
+
+        Data.maxsize_var = maxsize
         generateVOLUME(Data.output_path, Data.rd_list, Data.maxsize_var, Data.roadID)
 
     # Control Visualize button
@@ -712,74 +725,238 @@ class ReceptorsTab(tk.Frame, Data):
 
         # Create Receptor generation frame
         # Label-frame for Receptor generation frame
-        receptor_gen_frame = tk.LabelFrame(self, text="Input for receptors generation", width=300, height=200,
-                                           font=(None, 15, "bold"))
-        receptor_gen_frame.grid(row=0, column=1, sticky=tk.W + tk.E + tk.N + tk.S)
+        self.receptor_gen_frame = tk.LabelFrame(self, text="Input for receptors generation", width=300, height=200,
+                                                font=(None, 15, "bold"))
+        self.receptor_gen_frame.grid(row=0, column=1, sticky=tk.W + tk.E + tk.N + tk.S)
 
-        self.createReceptorGenFrame(receptor_gen_frame)
+        self.createReceptorGenFrame()
 
     def createInfoFrame(self, labelframe):
         # Labels
         for str in ReceptorsTabConstants.infoList:
             tk.Label(labelframe, text=str, wraplength=300).grid(sticky=tk.W)
 
-    def createReceptorGenFrame(self, frame):
+    def createReceptorGenFrame(self):
         # Label
-        tk.Label(frame, text="Near-road receptors:", wraplength=300).grid(row=0, column=0, columnspan=2, sticky=tk.W)
-        tk.Label(frame, text="1.1. Import from csv file", wraplength=300).grid(row=1, column=0, sticky=tk.W)
+        tk.Label(self.receptor_gen_frame, text="Near-road receptors:", wraplength=300).grid(row=0, column=0,
+                                                                                            columnspan=2, sticky=tk.W)
+        tk.Label(self.receptor_gen_frame, text="1.1. Import from csv file", wraplength=300).grid(row=1, column=0,
+                                                                                                 sticky=tk.W)
 
         # Upload csv button
-        self.btn_uploadCSV = ttk.Button(frame)
+        self.btn_uploadCSV = ttk.Button(self.receptor_gen_frame)
         self.btn_uploadCSV.configure(text="Upload csv", padding=10, default=tk.ACTIVE,
                                      command=self.btnUploadCSV)
-        self.btn_uploadCSV.grid(row=1, column=1, sticky=tk.E)
+        self.btn_uploadCSV.grid(row=1, column=1, sticky=tk.W)
 
-        # File dialog for upload file path
-        self.entry_uploadcsv = tk.Text(frame, height=1, width=50)
-        self.entry_uploadcsv.grid(row=2, column=0, columnspan=2, sticky=tk.W)
+        # Label for upload file path
+        self.label_uploadcsv = tk.Label(self.receptor_gen_frame, text="No csv file selected", wraplength=500)
+        self.label_uploadcsv.grid(row=2, column=0, columnspan=2, sticky=tk.W)
 
-        tk.Label(frame, text="or", wraplength=300).grid(row=3, column=0, columnspan=2)
-        tk.Label(frame, text="1.2. Type layers information:", wraplength=300).grid(row=4, column=0, columnspan=2)
+        tk.Label(self.receptor_gen_frame, text="or", wraplength=300).grid(row=3, column=0, columnspan=2)
+        tk.Label(self.receptor_gen_frame, text="1.2. Type layers information:", wraplength=300).grid(row=4, column=0,
+                                                                                                     columnspan=2)
 
         # Receptor csv table
-        # self.table = tktable.Table(frame, rows=10, cols=4)
-        # self.table.grid(row=5, column=0, columnspan=2)
+        self.sheet = Sheet(None, self.receptor_gen_frame)
+        self.sheet.grid(row=4, column=0, columnspan=2)
 
         # 2
-        tk.Label(frame, text="2. Gridded - interval (SG in m)", wraplength=300).grid(row=6, column=0, columnspan=1,
-                                                                                     sticky=tk.W)
+        tk.Label(self.receptor_gen_frame, text="2. Gridded - interval (SG in m)", wraplength=300).grid(row=6, column=0,
+                                                                                                       columnspan=1,
+                                                                                                       sticky=tk.W)
 
-        self.entry_interval = tk.Text(frame, height=1, width=10)
-        self.entry_interval.grid(row=6, column=1)
+        self.entry_interval = tk.StringVar()
+        entry_interval = tk.Entry(self.receptor_gen_frame, textvariable=self.entry_interval, width=10)
+        entry_interval.grid(row=6, column=1, sticky=tk.W)
 
         # 3
-        tk.Label(frame, text="3. Recptor elevations", wraplength=300).grid(row=7, column=0, columnspan=1, sticky=tk.W)
+        tk.Label(self.receptor_gen_frame, text="3. Receptor elevations", wraplength=300).grid(row=7, column=0,
+                                                                                              columnspan=1, sticky=tk.W)
 
-        self.entry_elevation = tk.Text(frame, height=1, width=10)
-        self.entry_elevation.grid(row=7, column=1)
+        self.entry_elevation = tk.StringVar()
+        entry_elevation = tk.Entry(self.receptor_gen_frame, textvariable=self.entry_elevation, width=10)
+        entry_elevation.grid(row=7, column=1, sticky=tk.W)
 
         # Generate and visualize receptors buttons
-        self.btn_generateRecp = ttk.Button(frame)
+        self.btn_generateRecp = ttk.Button(self.receptor_gen_frame)
         self.btn_generateRecp.configure(text="Generate receptors", padding=10, default=tk.ACTIVE,
                                         command=self.btnGenerateRec)
-        self.btn_generateRecp.grid(row=8, column=0, sticky=tk.E + tk.W)
+        self.btn_generateRecp.grid(row=8, column=0, sticky=tk.W)
 
-        self.btn_visualizeRecp = ttk.Button(frame)
+        self.btn_visualizeRecp = ttk.Button(self.receptor_gen_frame)
         self.btn_visualizeRecp.configure(text="Visualize receptors", padding=10, default=tk.ACTIVE,
                                          command=self.btnVisualizeRec)
-        self.btn_visualizeRecp.grid(row=8, column=1, sticky=tk.E + tk.W)
+        self.btn_visualizeRecp.grid(row=8, column=1, sticky=tk.W)
 
     # Upload csv button control
     def btnUploadCSV(self):
-        pass
+        # Choose csv file
+        path = tk.filedialog.askopenfilename(initialdir=os.getcwd(), title="Select file",
+                                             filetypes=(("csv files", "*.csv"), ("all files", "*.*"))
+                                             )
+
+        # Set path in the label
+        self.label_uploadcsv.config(text=path)
+
+        # Read csv as dataframe
+        csv_df = pd.read_csv(path)
+
+        # print("csv")
+        # print(csv_df.iloc[0:5, :])
+
+        self.sheet = Sheet(csv_df, self.receptor_gen_frame)
+        self.sheet.grid(row=4, column=0, columnspan=2)
 
     # Generate receptors button control
     def btnGenerateRec(self):
-        pass
+        if self.checkInput():
+            # Transform list data of receptor to dataframe
+            output_list = self.sheet.get_sheet_data(return_copy=False, get_header=False, get_index=False)
+            df = pd.DataFrame(output_list)
+
+            # Add columns
+            df.columns = ReceptorsTabConstants.colList
+
+            # Replace empty string with NaN
+            df = df.replace('', np.nan, regex=True)
+
+            # Delete rows which have at least one null value
+            df = df.dropna(how='any')
+
+            # Transform all data to int
+            df = df.astype(int)
+
+            # Leave corresponding road type of receptor to the GIS data
+            df = df[df['F_LTYPE'].isin(Data.rd_list[Data.roadTp].unique())].reset_index(drop=True)
+
+            # Check if receptor data has no row
+            if df.size == 0:
+                tk.messagebox.showerror('showerror', "The receptor dataframe does not have data")
+                return
+
+            # Generate receptor
+            self.generateRec(df)
+
+    # Check input of Receptor tab
+    def checkInput(self):
+        errFlag = True
+        errMsg = ""
+
+        # Check rd_list is not None
+        if Data.rd_list is None:
+            errFlag = False
+            errMsg += " No road data imported"
+
+        # Check interval
+        if self.entry_interval.get() == "":
+            errFlag = False
+            errMsg += "\n No interval value"
+        else:
+            # Transform value to float
+            Data.interval = float(self.entry_interval.get())
+
+        # Check elevations
+        if self.entry_elevation.get() == "":
+            errFlag = False
+            errMsg += "\n No elevation value"
+        else:
+            # Transform value to float
+            Data.elevation = float(self.entry_elevation.get())
+
+        if errFlag is not True:
+            tk.messagebox.showerror('showerror', errMsg)
+
+        return errFlag
+
+    # Generate receptors (Arguments: receptor dataframe, interval, elevation)
+    def generateRec(self, rec_df):
+        # Generate receptors
+        self.rec_gdf = generateReceptors(Data.rd_list, Data.output_path, Data.roadTp, Data.xref_left_m,
+                                         Data.xref_right_m,
+                                         Data.yref_lower_m, Data.yref_higher_m, rec_df,
+                                         Data.interval, Data.elevation)
 
     # Visualize receptors button control
     def btnVisualizeRec(self):
-        pass
+        fig = visualizeReceptors(Data.rd_list, self.rec_gdf, Data.xref_left_m, Data.xref_right_m,
+                                 Data.yref_lower_m,
+                                 Data.yref_higher_m)
+        title = ReceptorsTabConstants.visualizeWindowTitle
+
+        # Open pop up window to show the output plot
+        visualizeWindow = tk.Toplevel(self)
+        visualizeWindow.title(title)
+        canvas = FigureCanvasTkAgg(fig, master=visualizeWindow)
+        canvas.get_tk_widget().pack(expand=True, fill="both")
+        toolbar = NavigationToolbar2Tk(canvas, visualizeWindow)
+        toolbar.update()
+        toolbar.pack(anchor=tk.CENTER)
+
+
+# Receptor table class
+class Sheet(tksheet.Sheet):
+    def __init__(self, receptor_df, master=None):
+        super().__init__(master, column_width=75, height=200)
+
+        # Receptor csv data frame
+        self.receptor_df = receptor_df
+
+        # Create spreadsheet table
+        self.createTable(receptor_df)
+
+    # Create Spread sheet table of receptor data frame
+    def createTable(self, receptor_df):
+
+        # List of output table
+        if receptor_df is None or len(receptor_df) == 0:
+            lst_df = [["", "", "", ""]]
+        else:
+            lst_df = receptor_df.values.tolist()
+
+        # Set header
+        headers_list = ReceptorsTabConstants.colList
+        headers = [f'{c}' for c in headers_list]
+        self.headers(headers)
+
+        # Set data
+        self.set_sheet_data(lst_df)
+
+        # Set bindings
+        self.enable_bindings(("single_select",
+
+                              "row_select",
+
+                              "column_width_resize",
+
+                              "arrowkeys",
+
+                              "right_click_popup_menu",
+
+                              "rc_select",
+
+                              "rc_insert_row",
+
+                              "rc_delete_row",
+
+                              "copy",
+
+                              "cut",
+
+                              "paste",
+
+                              "delete",
+
+                              "undo",
+
+                              "edit_cell"))
+
+
+# Emissions tab class
+class EmissionsTab(tk.Frame, Data):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.grid(row=0, column=0)
 
 
 # Main window class
@@ -789,7 +966,7 @@ class MainWindow(tk.Tk):
 
         # Main window
         self.title("GIS TO AERMOD Tool")
-        self.geometry("700x400")
+        self.geometry("700x450")
 
 
 def main():
@@ -808,6 +985,10 @@ def main():
     # Add Receptors tab
     receptors_tab = ReceptorsTab(master=nb)
     nb.add(receptors_tab, text='Receptors', padding=5)
+
+    # Add Emissions tab
+    emissions_tab = EmissionsTab(master=nb)
+    nb.add(emissions_tab, text='Emissions', padding=5)
 
     nb.pack(expand=True, fill="both")
 

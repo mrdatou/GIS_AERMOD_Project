@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from shapely import geometry
-from shapely.geometry import LineString, MultiLineString, Point
+from shapely.geometry import LineString, MultiLineString, Point, Polygon
 import descartes
 
 
@@ -360,3 +360,173 @@ def add_polygon_from_poly(row):
     x = [float(xx.split(' ')[0]) for xx in xxxx]
     y = [float(yy.split(' ')[1]) for yy in xxxx]
     return geometry.Polygon((x[j], y[j]) for j in range(len(x)))
+
+# Generate receptors
+def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, rec_lyr, rec_grid_interval, rec_z):
+
+    #rec_lyr = rec_lyr[rec_lyr['F_LTYPE'].isin(rd_list[L_tp].unique())].reset_index(drop=True)
+    ###########################################################################################
+    ###################################################################
+    # 2. Receptor Module: Generate receptor layers
+    ###################################################################
+    # Intervals of gridded receptors in meters
+    print('')
+    print('Generate the near-road receptor...')
+    print('Generating near road receptors...')
+    ## 2.1. Generate near road receptors
+    # Input needed below!!
+    # Also, please define receptor layers in 'receptor_layers.csv' for each road type
+    # DISTANCE: distance in meters from road edge. INTERVAL: receptor intervals in meters
+    # Then load the layer information
+    frame_tt = []
+    for rt in rec_lyr.F_LTYPE.unique():
+        rd_list1 = rd_list[rd_list[L_tp] == rt].reset_index(drop=True)
+        rec_lyr1 = rec_lyr[rec_lyr['F_LTYPE'] == rt].reset_index(drop=True)
+        for li, lrow in rec_lyr1.iterrows():
+            buffer_1 = gpd.GeoDataFrame( \
+                geometry=rd_list1.apply(lambda x: \
+                                            x.geometry.buffer(lrow['DISTANCE'] + x['bw'], cap_style=1), axis=1))
+            buffer_1['dissol'] = 1
+            buffer_2 = gpd.GeoDataFrame(buffer_1.dissolve(by='dissol').reset_index(drop=True))
+            ii = 0
+            print("     Road Type " + str(lrow['F_LTYPE']) + " - Generating layer " + str(
+                lrow['LAYER']) + " receptors...")
+            frame = []
+            rec_n = str(lrow['F_LTYPE']) + '_' + str(lrow['LAYER']) + '_'
+            for i, row in buffer_2.iterrows():
+                if (type(row.geometry) == Polygon):
+                    rec_rd = gpd.GeoDataFrame(columns=['geometry', 'x', 'y', 'coord_aer'])
+                    x_m = [x[0] for x in row.geometry.exterior.coords[:]]
+                    y_m = [x[1] for x in row.geometry.exterior.coords[:]]
+                    geo_bufl = LineString(Point(xy) for xy in zip(x_m, y_m))
+                    bl = geo_bufl.length
+                    distances = np.arange(2, bl, lrow['INTERVAL'])
+                    points = [geo_bufl.interpolate(distance) for distance in distances]
+                    rec_rd['geometry'] = points
+                    # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
+                    rec_rd['x'] = [x.coords[:][0][0] for x in points]
+                    rec_rd['y'] = [y.coords[:][0][1] for y in points]
+                    rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str)
+                    frame.append(rec_rd.copy())
+                    for interior in row.geometry.interiors:
+                        rec_rd = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
+                        x_m = [x[0] for x in interior.coords[:]]
+                        y_m = [x[1] for x in interior.coords[:]]
+                        geo_bufl = LineString(Point(xy) for xy in zip(x_m, y_m))
+                        bl = geo_bufl.length
+                        distances = np.arange(2, bl, lrow['INTERVAL'])
+                        points = [geo_bufl.interpolate(distance) for distance in distances]
+                        rec_rd['geometry'] = points
+                        # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
+                        rec_rd['x'] = [x.coords[:][0][0] for x in points]
+                        rec_rd['y'] = [y.coords[:][0][1] for y in points]
+                        rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(
+                            str) + ' ' + str(round(rec_z, 1))
+                        frame.append(rec_rd.copy())
+                else:
+                    for pg1 in row.geometry:
+                        rec_rd = gpd.GeoDataFrame(columns=['geometry', 'x', 'y', 'coord_aer'])
+                        x_m = [x[0] for x in pg1.exterior.coords[:]]
+                        y_m = [x[1] for x in pg1.exterior.coords[:]]
+                        geo_bufl = LineString(Point(xy) for xy in zip(x_m, y_m))
+                        bl = geo_bufl.length
+                        distances = np.arange(2, bl, lrow['INTERVAL'])
+                        points = [geo_bufl.interpolate(distance) for distance in distances]
+                        rec_rd['geometry'] = points
+                        # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
+                        rec_rd['x'] = [x.coords[:][0][0] for x in points]
+                        rec_rd['y'] = [y.coords[:][0][1] for y in points]
+                        rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str)
+                        frame.append(rec_rd.copy())
+                        for interior in pg1.interiors:
+                            rec_rd = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
+                            x_m = [x[0] for x in interior.coords[:]]
+                            y_m = [x[1] for x in interior.coords[:]]
+                            geo_bufl = LineString(Point(xy) for xy in zip(x_m, y_m))
+                            bl = geo_bufl.length
+                            distances = np.arange(2, bl, lrow['INTERVAL'])
+                            points = [geo_bufl.interpolate(distance) for distance in distances]
+                            rec_rd['geometry'] = points
+                            # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
+                            rec_rd['x'] = [x.coords[:][0][0] for x in points]
+                            rec_rd['y'] = [y.coords[:][0][1] for y in points]
+                            rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(
+                                str) + ' ' + str(round(rec_z, 1))
+                            frame.append(rec_rd.copy())
+            df1 = pd.DataFrame(pd.concat(frame))
+            df1['rec_id'] = [rec_n + str(ii) for ii in range(1, len(df1) + 1)]
+            frame_tt.append(df1)
+
+    # Delete!!
+    print(type(frame_tt))
+    print(len(frame_tt))
+
+    rec_rd = pd.DataFrame(pd.concat(frame_tt))
+    rec_rd = rec_rd[['rec_id', 'geometry', 'x', 'y', 'coord_aer']]
+
+    ## 2.2. Generate grided receptor
+    print('')
+    print("Generating grided receptor...")
+    rec_gr = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
+    ii = 0
+    # Original
+    #for x in range(int(xref_left_m), int(xref_right_m) + rec_grid_interval, rec_grid_interval):
+        #for y in range(int(yref_lower_m), int(yref_higher_m) + rec_grid_interval, rec_grid_interval):
+
+    for x in range(int(xref_left_m), int(xref_right_m) + int(rec_grid_interval), int(rec_grid_interval)):
+        for y in range(int(yref_lower_m), int(yref_higher_m) + int(rec_grid_interval), int(rec_grid_interval)):
+
+            pt = Point(x, y)
+            rec_gr.loc[len(rec_gr)] = ['gr_' + str(ii), pt, \
+                                       round(pt.coords[0][0], 1), round(pt.coords[0][1], 1), \
+                                       str(round(pt.coords[0][0], 1)) + ' ' + str(
+                                           round(pt.coords[0][1], 1)) + ' ' + str(
+                                           round(rec_z, 1))]
+            ii += 1
+    # combine two types of receptors: grid and near-road
+    rec_df = pd.DataFrame(pd.concat([rec_gr, rec_rd])).reset_index(drop=True)
+    rec_gdf = gpd.GeoDataFrame(rec_df, geometry=rec_df.geometry)
+    # Delete receptor falls into the link
+    print('')
+    print("Almost done! Deleting receptors that fall into the link within 5 m...")
+    buffer_rd = gpd.GeoDataFrame(
+        geometry=rd_list.apply(lambda x: x.geometry.buffer(x['bw'] + 4.9999, cap_style=1), axis=1))
+    buffer_rd['dissol'] = 1
+    buffer_rd1 = gpd.GeoDataFrame(buffer_rd.dissolve(by='dissol').reset_index(drop=True))
+
+    """
+    rec_new = gpd.GeoDataFrame(columns = ['rec_id','geometry','x','y','coord_aer'])
+    for ii, rr in buffer_rd1.iterrows():
+        for i , row in rec_df.iterrows():
+            if not rr.geometry.intersects(row.geometry):
+                rec_new.loc[len(rec_new)] = [row['rec_id'],row['geometry'],row['x'],row['y'],row['coord_aer']]
+                #print(i)
+    rec_gdf.plot()
+    buffer_rd1.plot()
+    # Show geometry and receptors
+    """
+    rec_gdf = rec_gdf[~rec_gdf['rec_id'].isin(gpd.clip(rec_gdf, buffer_rd1)['rec_id'].tolist())]
+    rec_gdf.to_csv(output_path + '/receptors_list.csv', index=False)
+    print("Done! Receptor lists exported to 'receptors_list.csv'.")
+
+    return rec_gdf
+
+# Visualize receptors
+def visualizeReceptors(rd_list, rec_gdf, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
+    fig, ax = plt.subplots()
+    buffer_0 = gpd.GeoDataFrame( \
+        geometry=rd_list.apply(lambda x: \
+                                   x.geometry.buffer(x['bw'], cap_style=1), axis=1))
+    buffer_0['dissol'] = 1
+    buffer_0 = gpd.GeoDataFrame(buffer_0.dissolve(by='dissol').reset_index(drop=True))
+    buffer_0.plot(ax=ax, color='blue', alpha=0.5)
+    rd_list.plot(ax=ax, color='blue')
+    plt.scatter(rec_gdf['x'], rec_gdf['y'], color='red', alpha=1, s=0.3)
+    plt.title("Receptors Layout")
+    plt.axis('scaled')
+    plt.xlabel('meter')
+    plt.ylabel('meter')
+    plt.xlim(xref_left_m, xref_right_m)
+    plt.ylim(yref_lower_m, yref_higher_m)
+
+    return fig

@@ -68,3 +68,13 @@ class ReceptorsTabConstants():
                 "• INTERVAL: space intervals within each layer",
                 "2. Gridded receptors with space intervals specified on the right.",
                 "3. Elevation of receptors (m) above road ground, 1.5 m recommended."]
+
+    # Columns for spreadsheet
+    colList = ("F_LTYPE",
+               "LAYER",
+               "DISTANCE",
+               "INTERVAL")
+
+    # Visualize window title
+    visualizeWindowTitle = "Visualize receptors"
+
