@@ -78,3 +78,15 @@ class ReceptorsTabConstants():
     # Visualize window title
     visualizeWindowTitle = "Visualize receptors"
 
+# Constant values for Emissions Tab
+class EmissionsTabConstants():
+
+    infoList = ["Emission Module” can be skipped if emission information is not available. Users can still generate AERMOD road geometry and receptors with the tool.",
+                "To generate link-level emissions:",
+                "1. Select GIS column for link emission info, and emission units in rate (g per mile per hour) or inventory (g per link per hour)",
+                "2. Select source(s) you want to generate emissions for",
+                "• “em_AREA.csv” from “AREA.csv”",
+                "• “em_LINE.csv” from “Line.csv”",
+                "• “em_RLINEXT.csv” from “Line.csv”",
+                "• “em_VOLUME_XX.csv” Need to upload VOLUME csv for emissions generation"]
+

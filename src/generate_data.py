@@ -473,8 +473,21 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
     #for x in range(int(xref_left_m), int(xref_right_m) + rec_grid_interval, rec_grid_interval):
         #for y in range(int(yref_lower_m), int(yref_higher_m) + rec_grid_interval, rec_grid_interval):
 
+    # Linespace
+    count = 0
+    #for x in np.linspace(xref_left_m, xref_right_m + rec_grid_interval, (xref_right_m + rec_grid_interval - xref_left_m) / rec_grid_interval + 1):
+    #    for y in np.linspace(yref_lower_m, yref_higher_m + rec_grid_interval, (yref_higher_m + rec_grid_interval - yref_lower_m) / rec_grid_interval + 1):
+    #        count += 1
+
+
+    print("#loop of Linespace: " + str(count))
+
+    count = 0
     for x in range(int(xref_left_m), int(xref_right_m) + int(rec_grid_interval), int(rec_grid_interval)):
         for y in range(int(yref_lower_m), int(yref_higher_m) + int(rec_grid_interval), int(rec_grid_interval)):
+
+            count += 1
+
 
             pt = Point(x, y)
             rec_gr.loc[len(rec_gr)] = ['gr_' + str(ii), pt, \
@@ -484,6 +497,9 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
                                            round(rec_z, 1))]
             ii += 1
     # combine two types of receptors: grid and near-road
+
+    print("#loop of range: " + str(count))
+
     rec_df = pd.DataFrame(pd.concat([rec_gr, rec_rd])).reset_index(drop=True)
     rec_gdf = gpd.GeoDataFrame(rec_df, geometry=rec_df.geometry)
     # Delete receptor falls into the link
@@ -530,3 +546,64 @@ def visualizeReceptors(rd_list, rec_gdf, xref_left_m, xref_right_m, yref_lower_m
     plt.ylim(yref_lower_m, yref_higher_m)
 
     return fig
+
+# Generate Emissions
+def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, GISRdID, Em, VOLUME_file_path, outputpath):
+    # Emission File:
+    # Identify if you need to run "Emission Module". Choose False if emission rates is not available.
+    # However, generated road geometry files has to be generated before running Emission Module
+    em_unit = 'g/mile/hr'  # g/mile/hr or g/link/hr
+
+    print("start")
+
+    rd_list['length_m'] = rd_list['geometry'].length
+    if isLink:
+        rd_list['emrate'] = rd_list[Em]
+    else:
+        rd_list['emrate'] = rd_list[Em] * (rd_list['length_m'] * 0.000621371)
+
+    if not os.path.exists(outputpath + '/emission'):
+        os.makedirs(outputpath + '/emission')
+
+    if AREA_em.get():
+        print("start area")
+        df = pd.read_csv(outputpath + '/AREA.csv')
+        df1 = df[[GISRdID, 'area']]
+        df1 = df1.groupby([GISRdID]).area.sum().reset_index()
+        df1 = df1.rename(columns={'area': 'tt_area'})
+        df = pd.merge(df, df1, how='left', on=[GISRdID])
+        df = pd.merge(df, rd_list[[GISRdID, 'emrate']], how='left', on=[GISRdID])
+        df = df.dropna(how='all')
+        df = df[(df['emrate'] > 0)]
+        # df['prop'] = df['area'] / df['tt_area']
+        df['em_aer'] = df['emrate'] / df['tt_area'] / 3600  # from meter to mile
+        df.to_csv(outputpath + '/emission' + '/em_AREA.csv', index=False)
+
+    if LINE_em.get() or RLINEXT_em.get():
+        print("start line")
+        df = pd.read_csv(outputpath + '/Line.csv')
+        df1 = df[[GISRdID, 'area']]
+        df1 = df1.groupby([GISRdID]).area.sum().reset_index()
+        df1 = df1.rename(columns={'area': 'tt_area'})
+        df = pd.merge(df, df1, how='left', on=[GISRdID])
+        df = pd.merge(df, rd_list[[GISRdID, 'emrate']], how='left', on=[GISRdID])
+        df = df.dropna(how='all')
+        df = df[(df['emrate'] > 0)]
+        # df['prop'] = df['area'] / df['tt_area']
+        df['em_aer'] = df['emrate'] / df['tt_area'] / 3600  # from meter to mile
+        if LINE_em.get():
+            # df = df.drop(['wd'], axis=1)
+            df.to_csv(outputpath + '/emission' + '/em_LINE.csv', index=False)
+        if RLINEXT_em.get():
+            df['em_aer'] = df['em_aer'] * df['wd']
+            df = df.drop(['wd'], axis=1)
+            df.to_csv(outputpath + '/emission' + '/em_RLINEXT.csv', index=False)
+
+    if VOLUME_em.get():
+        print("start volume")
+        df = pd.read_csv(VOLUME_file_path)
+        df = pd.merge(df, rd_list[[GISRdID, 'emrate']], how='left', on=[GISRdID])
+        df = df.dropna(how='all')
+        df = df[(df['emrate'] > 0)]
+        df['em_aer'] = df['emrate'] / df['nn'] / 3600  # from meter to mile
+        df.to_csv(outputpath + '/emission' + '/em_' + os.path.basename(VOLUME_file_path), index=False)

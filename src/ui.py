@@ -13,10 +13,10 @@ from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from GISPlotWindow import GISplotWindow
-from constants import RoadTabConstants, ReceptorsTabConstants
+from constants import RoadTabConstants, ReceptorsTabConstants, EmissionsTabConstants
 from dataprep import GISextract, dataConversion
 from generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA, generateVOLUME, visualizeVOLUME, \
-    generateReceptors, visualizeReceptors
+    generateReceptors, visualizeReceptors, generateEmissions
 
 
 # Class of variables which are shared with multiple frames
@@ -121,6 +121,8 @@ class DataTab(tk.Frame, Data):
             # Build file setting's drop down menus
             self.buildDropDownMenuSetting()
 
+
+
         else:
             # File does not exist
             tk.messagebox.showerror("Error", "File does not exist")
@@ -135,6 +137,9 @@ class DataTab(tk.Frame, Data):
         self.combo_roadTp["values"] = columns
         self.combo_numLane["values"] = columns
         self.combo_laneWid["values"] = columns
+
+        # Set columns of dropdown menu of Emissions tab
+        self.master.master.emissions_tab.combo_emission["values"] = columns
 
         # For Geometry dropdown menu, set geometry in the top if there exists 'geometry' column
         if 'geometry' in columns:
@@ -666,7 +671,6 @@ class RoadTab(tk.Frame, Data):
         # If the maxsize value is null
         if self.txt_maxsize_var.get() == "":
             tk.messagebox.showerror('showerror', "No max size input")
-            print("aaa")
             return
         else:
             # Transform maxsize var to float
@@ -801,9 +805,6 @@ class ReceptorsTab(tk.Frame, Data):
 
         # Read csv as dataframe
         csv_df = pd.read_csv(path)
-
-        # print("csv")
-        # print(csv_df.iloc[0:5, :])
 
         self.sheet = Sheet(csv_df, self.receptor_gen_frame)
         self.sheet.grid(row=4, column=0, columnspan=2)
@@ -958,6 +959,224 @@ class EmissionsTab(tk.Frame, Data):
         super().__init__(master)
         self.grid(row=0, column=0)
 
+        self.vol_df = None  # VOLUME csv data frame
+
+        # Create Info frame
+        # Label-frame for Info frame
+        infoFrame = tk.LabelFrame(self, text="Information for emissions", width=300, height=200,
+                                  font=(None, 15, "bold"))
+        infoFrame.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+
+        self.createInfoFrame(infoFrame)
+
+        # Create Emissions conversion frame
+        self.emission_conversion_frame = tk.Frame(self, borderwidth=5, relief=tk.GROOVE, width=300, height=200)
+        self.emission_conversion_frame.grid(row=0, column=1, sticky=tk.W + tk.E + tk.N + tk.S)
+
+        self.createEmissionConvFrame()
+
+    # Create emissions info frame
+    def createInfoFrame(self, labelframe):
+        # Labels
+        for str in EmissionsTabConstants.infoList:
+            tk.Label(labelframe, text=str, wraplength=300).grid(sticky=tk.W)
+
+    # Create Emissions conversion frame
+    def createEmissionConvFrame(self):
+        # Skip checkbox
+        self.bln_skip = tk.BooleanVar()
+        self.bln_skip.set(False)
+        self.chk_skip = tk.Checkbutton(self.emission_conversion_frame, command=self.controlChkSkip,
+                                       variable=self.bln_skip, text="Skip the “Emission Module”")
+        self.chk_skip.grid(row=0, column=0)
+
+        # 1. Title
+        tk.Label(self.emission_conversion_frame, text="Input for Emission Conversion", wraplength=300).grid(row=1,
+                                                                                                            column=0,
+                                                                                                            columnspan=2,
+                                                                                                            sticky=tk.W)
+        tk.Label(self.emission_conversion_frame, text="1. Select link emission column and unit in GIS",
+                 wraplength=300).grid(row=2,
+                                      column=0,
+                                      columnspan=2,
+                                      sticky=tk.W)
+
+        # Combo box to choose the emission column
+        tk.Label(self.emission_conversion_frame, text="Emission", wraplength=300).grid(row=3, column=0, sticky=tk.W)
+
+        self.combo_emission = ttk.Combobox(self.emission_conversion_frame, state='readonly')
+        self.combo_emission.grid(row=3, column=1)
+
+        # Emission Unit
+        tk.Label(self.emission_conversion_frame, text="Em Unit", wraplength=300).grid(row=4, column=0, rowspan=2,
+                                                                                      sticky=tk.W)
+
+        # Emission Unit checkbox
+        self.bln_mile = tk.BooleanVar()
+        self.bln_mile.set(False)
+        self.chk_mile = tk.Checkbutton(self.emission_conversion_frame, command=lambda: self.controlChkEmUnit(1),
+                                       variable=self.bln_mile, text="g/mile/hr")
+        self.chk_mile.grid(row=4, column=1)
+
+        self.bln_link = tk.BooleanVar()
+        self.bln_link.set(False)
+        self.chk_link = tk.Checkbutton(self.emission_conversion_frame, command=lambda: self.controlChkEmUnit(2),
+                                       variable=self.bln_link, text="g/link/hr")
+        self.chk_link.grid(row=5, column=1)
+
+        # 2. Title
+        tk.Label(self.emission_conversion_frame, text="2. Which source(s) do you want to generate emissions for?",
+                 wraplength=300).grid(row=6, column=0, columnspan=2,
+                                      sticky=tk.W)
+
+        # AREA
+        self.bln_area = tk.BooleanVar()
+        self.bln_area.set(False)
+        self.chk_area = tk.Checkbutton(self.emission_conversion_frame, variable=self.bln_area, text="AREA")
+        self.chk_area.grid(row=7, column=0, sticky=tk.W)
+
+        # LINE
+        self.bln_line = tk.BooleanVar()
+        self.bln_line.set(False)
+        self.chk_line = tk.Checkbutton(self.emission_conversion_frame, variable=self.bln_line, text="LINE or RLINE")
+        self.chk_line.grid(row=8, column=0, sticky=tk.W)
+
+        # RLINEXT
+        self.bln_rlinext = tk.BooleanVar()
+        self.bln_rlinext.set(False)
+        self.chk_rlinext = tk.Checkbutton(self.emission_conversion_frame, variable=self.bln_rlinext, text="RLINEXT")
+        self.chk_rlinext.grid(row=9, column=0, sticky=tk.W)
+
+        # VOLUME
+        self.bln_vol = tk.BooleanVar()
+        self.bln_vol.set(False)
+        self.chk_vol = tk.Checkbutton(self.emission_conversion_frame, variable=self.bln_vol, text="VOLUME")
+        self.chk_vol.grid(row=10, column=0, sticky=tk.W)
+
+        self.button_volume = ttk.Button(self.emission_conversion_frame)
+        self.button_volume.configure(text="Upload VOLUME csv", padding=10, default=tk.ACTIVE, command=self.btnVol)
+        self.button_volume.grid(row=10, column=1, sticky=tk.W)
+
+        # Verify input and generate emission button
+        self.button_generateEm = ttk.Button(self.emission_conversion_frame)
+        self.button_generateEm.configure(text="Upload VOLUME csvVerify input and generate emission", padding=10,
+                                         default=tk.ACTIVE, command=self.btnEm)
+        self.button_generateEm.grid(row=11, column=0, columnspan=2)
+
+    # Control Skip check button
+    def controlChkSkip(self):
+        # If true, disable all features
+        if self.bln_skip.get() == True:
+            self.combo_emission.config(state=tk.DISABLED)
+
+            self.chk_mile.config(state=tk.DISABLED)
+            self.chk_link.config(state=tk.DISABLED)
+
+            self.chk_area.config(state=tk.DISABLED)
+            self.chk_line.config(state=tk.DISABLED)
+            self.chk_rlinext.config(state=tk.DISABLED)
+            self.chk_vol.config(state=tk.DISABLED)
+
+            self.button_volume.config(state=tk.DISABLED)
+            self.button_generateEm.config(state=tk.DISABLED)
+
+        else:
+            self.combo_emission.config(state=tk.NORMAL)
+
+            self.chk_mile.config(state=tk.NORMAL)
+            self.chk_link.config(state=tk.NORMAL)
+
+            self.chk_area.config(state=tk.NORMAL)
+            self.chk_line.config(state=tk.NORMAL)
+            self.chk_rlinext.config(state=tk.NORMAL)
+            self.chk_vol.config(state=tk.NORMAL)
+
+            self.button_volume.config(state=tk.NORMAL)
+            self.button_generateEm.config(state=tk.NORMAL)
+
+    # Emissions Unit checkbox control
+    def controlChkEmUnit(self, index):
+        if index == 1:
+            self.bln_link.set(False)
+            self.chk_link.config(state=tk.NORMAL)
+            self.chk_mile.config(state=tk.DISABLED)
+        if index == 2:
+            self.bln_mile.set(False)
+            self.chk_mile.config(state=tk.NORMAL)
+            self.chk_link.config(state=tk.DISABLED)
+
+    # Upload VOLUME csv button control
+    def btnVol(self):
+        # Choose VOLUME csv file
+        self.pathVolcsv = tk.filedialog.askopenfilename(initialdir=os.getcwd(), title="Select file",
+                                                   filetypes=(("csv files", "*.csv"), ("all files", "*.*"))
+                                                   )
+
+    # Verify input and generate emission button
+    def btnEm(self):
+        if self.checkInput():
+            self.generateEmissions()
+
+    # Check input for generate emissions
+    def checkInput(self):
+        errFlag = True
+        errMsg = ""
+
+        # Check if Emission column is selected
+        if self.combo_emission.get() == "":
+            errFlag = False
+            errMsg += "No Emission is selected"
+
+        # Em Unit
+        if self.bln_mile.get() == False and self.bln_link.get() == False:
+            errFlag = False
+            errMsg += "\nNo Emission unit is selected"
+
+        # If any source is selected
+        if self.bln_area.get() == False and self.bln_line.get() == False and self.bln_rlinext.get() == False and self.bln_vol.get() == False:
+            errFlag = False
+            errMsg += "\nNo source is selected"
+
+        # If VOLUME is selected, then check if VOLUME csv is selected
+        if self.bln_vol.get() == True and (self.pathVolcsv is None or self.pathVolcsv == ""):
+            errFlag = False
+            errMsg += "\nVOLUME csv file is not selected"
+
+        if errFlag is not True:
+            tk.messagebox.showerror('showerror', errMsg)
+
+        return errFlag
+
+    # Generate Emissions
+    def generateEmissions(self):
+
+        generateEmissions(self.bln_area, self.bln_line, self.bln_rlinext, self.bln_vol, self.bln_link, Data.rd_list,
+                          Data.roadID, self.combo_emission.get(), self.pathVolcsv, Data.output_path)
+
+# Compilation tab class
+class CompilationTab(tk.Frame, Data):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.grid(row=0, column=0)
+
+        # Checkbox for Run AERMOD or not
+        self.bln_runAERMOD = tk.BooleanVar()
+        self.bln_runAERMOD.set(False)
+        self.chk_runAERMOD = tk.Checkbutton(self, variable=self.bln_runAERMOD, text="Run AERMOD")
+        self.chk_runAERMOD.grid(row=0, column=0, sticky=tk.W)
+
+        self.bln_noEmission = tk.BooleanVar()
+        self.bln_noEmission.set(False)
+        self.chk_noEmission = tk.Checkbutton(self, variable=self.bln_noEmission, text="Emission unavailable, just compile road and receptors input")
+        self.chk_noEmission.grid(row=0, column=1, sticky=tk.W)
+
+        # Create Rnning Info frame
+        infoFrame = tk.LabelFrame(self, text="Running Information", width=300, height=200,
+                                  font=(None, 15, "bold"))
+        infoFrame.grid(row=1, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+
+        #self.createInfoFrame(infoFrame)
+
 
 # Main window class
 class MainWindow(tk.Tk):
@@ -966,31 +1185,35 @@ class MainWindow(tk.Tk):
 
         # Main window
         self.title("GIS TO AERMOD Tool")
-        self.geometry("700x450")
+        self.geometry("700x500")
+
+        self.nb = ttk.Notebook(self, width=800, height=600)
+
+        # Add Data tab
+        self.data_tab = DataTab(master=self.nb)
+        self.nb.add(self.data_tab, text='Data', padding=5)
+
+        # Add Road tab
+        self.road_tab = RoadTab(master=self.nb)
+        self.nb.add(self.road_tab, text='Road', padding=5)
+
+        # Add Receptors tab
+        self.receptors_tab = ReceptorsTab(master=self.nb)
+        self.nb.add(self.receptors_tab, text='Receptors', padding=5)
+
+        # Add Emissions tab
+        self.emissions_tab = EmissionsTab(master=self.nb)
+        self.nb.add(self.emissions_tab, text='Emissions', padding=5)
+
+        # Add Compilation tab
+        self.compilation_tab = CompilationTab(master=self.nb)
+        self.nb.add(self.compilation_tab, text='Compilation', padding=5)
+
+        self.nb.pack(expand=True, fill="both")
 
 
 def main():
     root = MainWindow()
-
-    nb = ttk.Notebook(root, width=800, height=600)
-
-    # Add Data tab
-    data_tab = DataTab(master=nb)
-    nb.add(data_tab, text='Data', padding=5)
-
-    # Add Road tab
-    road_tab = RoadTab(master=nb)
-    nb.add(road_tab, text='Road', padding=5)
-
-    # Add Receptors tab
-    receptors_tab = ReceptorsTab(master=nb)
-    nb.add(receptors_tab, text='Receptors', padding=5)
-
-    # Add Emissions tab
-    emissions_tab = EmissionsTab(master=nb)
-    nb.add(emissions_tab, text='Emissions', padding=5)
-
-    nb.pack(expand=True, fill="both")
 
     root.mainloop()
 
