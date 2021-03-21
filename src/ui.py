@@ -1109,8 +1109,8 @@ class EmissionsTab(tk.Frame, Data):
     def btnVol(self):
         # Choose VOLUME csv file
         self.pathVolcsv = tk.filedialog.askopenfilename(initialdir=os.getcwd(), title="Select file",
-                                                   filetypes=(("csv files", "*.csv"), ("all files", "*.*"))
-                                                   )
+                                                        filetypes=(("csv files", "*.csv"), ("all files", "*.*"))
+                                                        )
 
     # Verify input and generate emission button
     def btnEm(self):
@@ -1153,6 +1153,7 @@ class EmissionsTab(tk.Frame, Data):
         generateEmissions(self.bln_area, self.bln_line, self.bln_rlinext, self.bln_vol, self.bln_link, Data.rd_list,
                           Data.roadID, self.combo_emission.get(), self.pathVolcsv, Data.output_path)
 
+
 # Compilation tab class
 class CompilationTab(tk.Frame, Data):
     def __init__(self, master=None):
@@ -1167,15 +1168,99 @@ class CompilationTab(tk.Frame, Data):
 
         self.bln_noEmission = tk.BooleanVar()
         self.bln_noEmission.set(False)
-        self.chk_noEmission = tk.Checkbutton(self, variable=self.bln_noEmission, text="Emission unavailable, just compile road and receptors input")
+        self.chk_noEmission = tk.Checkbutton(self, variable=self.bln_noEmission,
+                                             text="Emission unavailable, just compile road and receptors input")
         self.chk_noEmission.grid(row=0, column=1, sticky=tk.W)
 
         # Create Rnning Info frame
         infoFrame = tk.LabelFrame(self, text="Running Information", width=300, height=200,
                                   font=(None, 15, "bold"))
-        infoFrame.grid(row=1, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        infoFrame.grid(row=1, column=0, rowspan=5, sticky=tk.W + tk.E + tk.N + tk.S)
 
-        #self.createInfoFrame(infoFrame)
+        # Buttons
+        self.area_comp = CompilationButtons("AREA", "AREA", "em_AREA", "Run AERMOD or compile AREA input", master=self)
+        self.area_comp.grid(row=1, column=1, sticky=tk.W + tk.E)
+
+        self.vol_comp = CompilationButtons("VOLUME", "VOLUME", "em_VOLUME", "Run AERMOD or compile VOLUME input",
+                                           master=self)
+        self.vol_comp.grid(row=2, column=1, sticky=tk.W + tk.E)
+
+        self.line_comp = CompilationButtons("LINE", "Line", "em_LINE", "Run AERMOD or compile LINE input", master=self)
+        self.line_comp.grid(row=3, column=1, sticky=tk.W + tk.E)
+
+        self.brline_comp = CompilationButtons("BETA RLINE", "Line", "em_LINE", "Run AERMOD or compile AREA input",
+                                              master=self)
+        self.brline_comp.grid(row=4, column=1, sticky=tk.W + tk.E)
+
+        self.arline_comp = CompilationButtons("ALPHA RLINEXT", "Line", "em_RLINEXT", "Run AERMOD or compile AREA input",
+                                              master=self)
+        self.arline_comp.grid(row=5, column=1, sticky=tk.W + tk.E)
+
+
+# compilation Button frame class
+class CompilationButtons(tk.Frame):
+    def __init__(self, title, label1, label3, btn_label, master=None):
+        super().__init__(master)
+
+        self.config(highlightbackground="black", highlightthickness=1)
+
+        # Title label
+        tk.Label(self, text=title, width=15, wraplength=300).grid(
+            row=0,
+            column=0,
+            rowspan=3,
+            sticky=tk.W)
+
+        # Buttons
+        self.btn_UploadRoad = ttk.Button(self)
+        self.btn_UploadRoad.configure(text="Upload road", default=tk.ACTIVE, width=20,
+                                      command=lambda: self.btn_UploadRoad(title))
+        self.btn_UploadRoad.grid(row=0, column=1)
+
+        self.btn_UploadRec = ttk.Button(self)
+        self.btn_UploadRec.configure(text="Upload receptors", default=tk.ACTIVE, width=20,
+                                     command=lambda: self.btn_UploadRec(title))
+        self.btn_UploadRec.grid(row=1, column=1)
+
+        self.btn_UploadEm = ttk.Button(self)
+        self.btn_UploadEm.configure(text="Upload emissions", default=tk.ACTIVE, width=20,
+                                    command=lambda: self.btn_UploadEm(title))
+        self.btn_UploadEm.grid(row=2, column=1)
+
+        # csv labels
+        tk.Label(self, text=label1 + ".csv", width=20).grid(
+            row=0,
+            column=2)
+
+        tk.Label(self, text="rec_layer.csv", width=20).grid(
+            row=1,
+            column=2)
+
+        tk.Label(self, text=label3 + ".csv", width=20).grid(
+            row=2,
+            column=2)
+
+        # Button
+        self.btn_runAERMOD = ttk.Button(self)
+        self.btn_runAERMOD.configure(text=btn_label, padding=10, width=40,
+                                     default=tk.ACTIVE, command=self.btn_runAERMOD)
+        self.btn_runAERMOD.grid(row=0, column=3, rowspan=3)
+
+    # Upload road button control
+    def btn_UploadRoad(self, title):
+        pass
+
+    # Upload receptors control
+    def btn_UploadRec(self, title):
+        pass
+
+    # Upload emissions control
+    def btn_UploadEm(self, title):
+        pass
+
+    # Run AERMOD or compile
+    def btn_runAERMOD(self):
+        pass
 
 
 # Main window class
