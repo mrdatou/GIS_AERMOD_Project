@@ -1,13 +1,18 @@
 import os
+import shutil
 import time
-
+import fiona
+from fiona import _shim, schema
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.interpolate import griddata
 from shapely import geometry
 from shapely.geometry import LineString, MultiLineString, Point, Polygon
 import descartes
+
+from constants import TEMPLATE
 
 
 def generateLINE(data):
@@ -304,8 +309,9 @@ def geo_volume(geo, sub_loc, subwd, GISRdID):
     rt_gdf[GISRdID] = geo[GISRdID]
     return rt_gdf[[GISRdID, 'linkID', 'linkID_new', 'geometry', 'nn', 'subwd']]
 
+
 # Visualize VOLUME
-def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
+def visualizeVOLUME(output_path, rd_list, max_vol, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
     print("start visualize VOLUME Max size = " + str(max_vol))
     # VOLUME visualization
 
@@ -342,10 +348,17 @@ def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_
             # circle_ex = plt.Circle(row['geometry'].coords[:][0],radius = row['yinit']*2.15+0.99,fc = 'none',linewidth = 0.5, linestyle = 'dashed', edgecolor='orange')
             # plt.gca().add_patch(circle_ex)
             plt.gca().add_patch(circle_ed)
+
+    '''
     rd_geo = pd.read_csv(output_path + '/AREA.csv')
     rd_geo['geometry'] = rd_geo.apply(lambda row: add_polygon_from_poly(row), axis=1)
     rd_geo = gpd.GeoDataFrame(rd_geo, geometry=rd_geo.geometry)
     rd_geo.plot(ax=ax, edgecolor='black', linewidth=0.3, alpha=0.5, facecolor="none", zorder=2)
+    '''
+    print("pass")
+    buffer_0 = gpd.GeoDataFrame(geometry=rd_list.apply(lambda x: x.geometry.buffer(x['bw'], cap_style=2), axis=1))
+    buffer_0.plot(ax=ax, edgecolor='black', linewidth=0.3, alpha=0.5, facecolor="none", zorder=2)
+
     plt.xlim(xref_left_m, xref_right_m)
     plt.ylim(yref_lower_m, yref_higher_m)
     plt.savefig(output_path + "/GIS_volume_" + str(max_vol) + ".jpg", bbox_inches='tight', dpi=600)
@@ -354,6 +367,7 @@ def visualizeVOLUME(output_path, max_vol, xref_left_m, xref_right_m, yref_lower_
 
     return fig
 
+
 # Function for visualizing VOLUME
 def add_polygon_from_poly(row):
     xxxx = row['poly'].split('((')[1].split('))')[0].split(', ')
@@ -361,10 +375,11 @@ def add_polygon_from_poly(row):
     y = [float(yy.split(' ')[1]) for yy in xxxx]
     return geometry.Polygon((x[j], y[j]) for j in range(len(x)))
 
-# Generate receptors
-def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, rec_lyr, rec_grid_interval, rec_z):
 
-    #rec_lyr = rec_lyr[rec_lyr['F_LTYPE'].isin(rd_list[L_tp].unique())].reset_index(drop=True)
+# Generate receptors
+def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, rec_lyr,
+                      rec_grid_interval, rec_z):
+    # rec_lyr = rec_lyr[rec_lyr['F_LTYPE'].isin(rd_list[L_tp].unique())].reset_index(drop=True)
     ###########################################################################################
     ###################################################################
     # 2. Receptor Module: Generate receptor layers
@@ -406,7 +421,7 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
                     # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
                     rec_rd['x'] = [x.coords[:][0][0] for x in points]
                     rec_rd['y'] = [y.coords[:][0][1] for y in points]
-                    rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str)
+                    rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str) + ' ' + str(round(rec_z, 1))
                     frame.append(rec_rd.copy())
                     for interior in row.geometry.interiors:
                         rec_rd = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
@@ -436,7 +451,7 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
                         # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
                         rec_rd['x'] = [x.coords[:][0][0] for x in points]
                         rec_rd['y'] = [y.coords[:][0][1] for y in points]
-                        rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str)
+                        rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str) + ' ' + str(round(rec_z, 1))
                         frame.append(rec_rd.copy())
                         for interior in pg1.interiors:
                             rec_rd = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
@@ -470,24 +485,21 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
     rec_gr = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
     ii = 0
     # Original
-    #for x in range(int(xref_left_m), int(xref_right_m) + rec_grid_interval, rec_grid_interval):
-        #for y in range(int(yref_lower_m), int(yref_higher_m) + rec_grid_interval, rec_grid_interval):
+    # for x in range(int(xref_left_m), int(xref_right_m) + rec_grid_interval, rec_grid_interval):
+    # for y in range(int(yref_lower_m), int(yref_higher_m) + rec_grid_interval, rec_grid_interval):
 
     # Linespace
     count = 0
-    #for x in np.linspace(xref_left_m, xref_right_m + rec_grid_interval, (xref_right_m + rec_grid_interval - xref_left_m) / rec_grid_interval + 1):
+    # for x in np.linspace(xref_left_m, xref_right_m + rec_grid_interval, (xref_right_m + rec_grid_interval - xref_left_m) / rec_grid_interval + 1):
     #    for y in np.linspace(yref_lower_m, yref_higher_m + rec_grid_interval, (yref_higher_m + rec_grid_interval - yref_lower_m) / rec_grid_interval + 1):
     #        count += 1
-
 
     print("#loop of Linespace: " + str(count))
 
     count = 0
     for x in range(int(xref_left_m), int(xref_right_m) + int(rec_grid_interval), int(rec_grid_interval)):
         for y in range(int(yref_lower_m), int(yref_higher_m) + int(rec_grid_interval), int(rec_grid_interval)):
-
             count += 1
-
 
             pt = Point(x, y)
             rec_gr.loc[len(rec_gr)] = ['gr_' + str(ii), pt, \
@@ -527,6 +539,7 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
 
     return rec_gdf
 
+
 # Visualize receptors
 def visualizeReceptors(rd_list, rec_gdf, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
     fig, ax = plt.subplots()
@@ -547,8 +560,10 @@ def visualizeReceptors(rd_list, rec_gdf, xref_left_m, xref_right_m, yref_lower_m
 
     return fig
 
+
 # Generate Emissions
-def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, GISRdID, Em, VOLUME_file_path, outputpath):
+def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, GISRdID, Em, VOLUME_file_path,
+                      outputpath):
     # Emission File:
     # Identify if you need to run "Emission Module". Choose False if emission rates is not available.
     # However, generated road geometry files has to be generated before running Emission Module
@@ -607,3 +622,366 @@ def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, 
         df = df[(df['emrate'] > 0)]
         df['em_aer'] = df['emrate'] / df['nn'] / 3600  # from meter to mile
         df.to_csv(outputpath + '/emission' + '/em_' + os.path.basename(VOLUME_file_path), index=False)
+
+# Run AERMOD: AREA input
+def runAERMOD_AREA(rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE, output_path):
+    AREA_rec_path = rec_path
+    if run_AERMOD.get():
+        AREA_em_path = em_path
+    AREA_rd_path = road_path
+
+    AREA_recdf = pd.read_csv(AREA_rec_path)
+    AREA_RECEPTORCOORD = "\n".join(('RE DISCCART ' + AREA_recdf['coord_aer']).tolist())
+    if run_AERMOD.get():
+        AREA_emdf = pd.read_csv(AREA_em_path)
+        AREA_LINKLOC = "\n".join(
+            ('SO LOCATION ' + AREA_emdf['linkID_new'] + ' AREAPOLY ' + AREA_emdf['vertex_aer'] + ' 0'))
+        AREA_LINKCOORD = "\n".join(('SO AREAVERT ' + AREA_emdf['linkID_new'] + ' ' + AREA_emdf['coord_aer']))
+        AREA_SRCPARAMEM = "\n".join(('SO SRCPARAM ' + AREA_emdf['linkID_new'] + ' ' + AREA_emdf['em_aer'].map(
+            str) + ' 1.3 ' + AREA_emdf['n'].map(str) + ' 2'))
+    else:
+        AREA_rddf = pd.read_csv(AREA_rd_path)
+        AREA_LINKLOC = "\n".join(
+            ('SO LOCATION ' + AREA_rddf['linkID_new'] + ' AREAPOLY ' + AREA_rddf['vertex_aer'] + ' 0'))
+        AREA_LINKCOORD = "\n".join(('SO AREAVERT ' + AREA_rddf['linkID_new'] + ' ' + AREA_rddf['coord_aer']))
+        AREA_SRCPARAMEM = "\n".join(
+            ('SO SRCPARAM ' + AREA_rddf['linkID_new'] + ' [emissionRate] 1.3 ' + AREA_rddf['n'].map(str) + ' 2'))
+    AREA_RBARRIER = ''
+    content = TEMPLATE.format( \
+        AVERTIME=AVERTIME, \
+        URBANOPT=URBANOPT, \
+        FLAGPOLE=FLAGPOLE, \
+        POLLUTID=POLLUTID, \
+        LINK_LOCATION=AREA_LINKLOC, \
+        SRCPARAM=AREA_SRCPARAMEM, \
+        RBARRIER=AREA_RBARRIER, \
+        LINKCOORD=AREA_LINKCOORD, \
+        RECEPTORCOORD=AREA_RECEPTORCOORD, \
+        file_sfc=os.path.basename(SURFFILE), \
+        file_pfl=os.path.basename(PROFFILE)
+    )
+    with open(output_path + "/aermod.inp", "w") as fp:
+        fp.write(content)
+    out_AREA = os.path.basename(AREA_rd_path).split('.')[0] + '_' + POLLUTID + '_' + AVERTIME
+    shutil.copy(output_path + '/aermod.inp', output_path + '/' + out_AREA + '.inp')
+    if run_AERMOD.get():
+        if not os.path.exists(output_path + '/aermod.exe'):
+            path = os.path.dirname(os.path.dirname(output_path))
+            print(path)
+            shutil.copy(path + "/aermod.exe", output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(SURFFILE)):
+            shutil.copy(SURFFILE, output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(PROFFILE)):
+            shutil.copy(PROFFILE, output_path);
+        os.chdir(output_path)
+        os.system('aermod.exe')
+        shutil.copy('aermod.out', out_AREA + '.out')
+
+# Run AERMOD: VOLUME input
+def runAERMOD_VOLUME(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+
+    ##################Compile / Run AERMOD for VOLUME ##############################################
+    VOLUME_rec_path = rec_path
+    if run_AERMOD.get():
+        VOLUME_em_path = em_path
+    VOLUME_rd_path = road_path
+
+    VOLUME_recdf = pd.read_csv(VOLUME_rec_path)
+    VOLUME_RECEPTORCOORD = "\n".join(('RE DISCCART ' + VOLUME_recdf['coord_aer']).tolist())
+    if run_AERMOD.get():
+        VOLUME_emdf = pd.read_csv(VOLUME_em_path)
+        VOLUME_LINKLOC = "\n".join(
+            ('SO LOCATION ' + VOLUME_emdf['linkID_new'] + ' VOLUME ' + VOLUME_emdf['coord_aer'] + ' 0'))
+        VOLUME_LINKCOORD = "** no nodes coord needed\n"
+        VOLUME_SRCPARAMEM = "\n".join(('SO SRCPARAM ' + VOLUME_emdf['linkID_new'] + ' ' + \
+                                       VOLUME_emdf['em_aer'].map(str) + ' 1.3 ' + VOLUME_emdf['yinit'].map(str) + ' 2'))
+    else:
+        VOLUME_rddf = pd.read_csv(VOLUME_rd_path)
+        VOLUME_LINKLOC = "\n".join(
+            ('SO LOCATION ' + VOLUME_rddf['linkID_new'] + ' VOLUME ' + VOLUME_rddf['coord_aer'] + ' 0'))
+        VOLUME_LINKCOORD = "** no nodes coord needed\n"
+        VOLUME_SRCPARAMEM = "\n".join(
+            ('SO SRCPARAM ' + VOLUME_rddf['linkID_new'] + ' [emissionRate] 1.3 ' + VOLUME_rddf['yinit'].map(
+                str) + ' 2'))
+    VOLUME_RBARRIER = ''
+    content = TEMPLATE.format( \
+        AVERTIME=AVERTIME, \
+        URBANOPT=URBANOPT, \
+        FLAGPOLE=FLAGPOLE, \
+        POLLUTID=POLLUTID, \
+        LINK_LOCATION=VOLUME_LINKLOC, \
+        SRCPARAM=VOLUME_SRCPARAMEM, \
+        RBARRIER=VOLUME_RBARRIER, \
+        LINKCOORD=VOLUME_LINKCOORD, \
+        RECEPTORCOORD=VOLUME_RECEPTORCOORD, \
+        file_sfc=os.path.basename(SURFFILE), \
+        file_pfl=os.path.basename(PROFFILE)
+    )
+    with open(output_path + "/aermod.inp", "w") as fp:
+        fp.write(content)
+    out_VOLUME = os.path.basename(VOLUME_rd_path).split('.')[0] + '_' + POLLUTID + '_' + AVERTIME
+    shutil.copy(output_path + '/aermod.inp', output_path + '/' + out_VOLUME + '.inp')
+    if run_AERMOD.get():
+        if not os.path.exists(output_path + '/aermod.exe'):
+            path = os.path.dirname(os.path.dirname(output_path))
+            shutil.copy(path + "/aermod.exe", output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(SURFFILE)):
+            shutil.copy(SURFFILE, output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(PROFFILE)):
+            shutil.copy(PROFFILE, output_path)
+        os.chdir(output_path)
+        os.system('aermod.exe')
+        shutil.copy('aermod.out', out_VOLUME + '.out')
+
+# Run AERMOD: LINE input
+def runAERMOD_LINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+    ########### Compile / Run AERMOD for LINE ############################################
+    LINE_rec_path = rec_path
+    if run_AERMOD.get():
+        LINE_em_path = em_path
+    LINE_rd_path = road_path
+
+    LINE_recdf = pd.read_csv(LINE_rec_path)
+    LINE_RECEPTORCOORD = "\n".join(('RE DISCCART ' + LINE_recdf['coord_aer']).tolist())
+    if run_AERMOD.get():
+        LINE_emdf = pd.read_csv(LINE_em_path)
+        LINE_LINKLOC = "\n".join(('SO LOCATION ' + LINE_emdf['linkID_new'] + ' LINE ' + LINE_emdf['coord_aer'] + ' 0'))
+        LINE_LINKCOORD = "** no nodes coord needed\n"
+        LINE_SRCPARAMEM = "\n".join(('SO SRCPARAM ' + LINE_emdf['linkID_new'] + ' ' + LINE_emdf['em_aer'].map(
+            str) + ' 1.3 ' + LINE_emdf['wd'].map(str) + ' 2'))
+    else:
+        LINE_rddf = pd.read_csv(LINE_rd_path)
+        LINE_LINKLOC = "\n".join(('SO LOCATION ' + LINE_rddf['linkID_new'] + ' LINE ' + LINE_rddf['coord_aer'] + ' 0'))
+        LINE_LINKCOORD = "** no nodes coord needed\n"
+        LINE_SRCPARAMEM = "\n".join(
+            ('SO SRCPARAM ' + LINE_rddf['linkID_new'] + ' [emissionRate] 1.3 ' + LINE_rddf['wd'].map(str) + ' 2'))
+    LINE_RBARRIER = ''
+    content = TEMPLATE.format( \
+        AVERTIME=AVERTIME, \
+        URBANOPT=URBANOPT, \
+        FLAGPOLE=FLAGPOLE, \
+        POLLUTID=POLLUTID, \
+        LINK_LOCATION=LINE_LINKLOC, \
+        SRCPARAM=LINE_SRCPARAMEM, \
+        RBARRIER=LINE_RBARRIER, \
+        LINKCOORD=LINE_LINKCOORD, \
+        RECEPTORCOORD=LINE_RECEPTORCOORD, \
+        file_sfc=os.path.basename(SURFFILE), \
+        file_pfl=os.path.basename(PROFFILE)
+    )
+    print("output_path: " + str(output_path))
+    with open(output_path + "/aermod.inp", "w") as fp:
+        fp.write(content)
+    out_LINE = os.path.basename(LINE_rd_path).split('.')[0] + '_' + POLLUTID + '_' + AVERTIME
+    shutil.copy(output_path + '/aermod.inp', output_path + '/' + out_LINE + '.inp')
+    if run_AERMOD.get():
+        if not os.path.exists(output_path + '/aermod.exe'):
+            path = os.path.dirname(os.path.dirname(output_path))
+            shutil.copy(path + "/aermod.exe", output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(SURFFILE)):
+            shutil.copy(SURFFILE, output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(PROFFILE)):
+            shutil.copy(PROFFILE, output_path)
+        os.chdir(output_path)
+        os.system('aermod.exe')
+        shutil.copy('aermod.out', out_LINE + '.out')
+    ##################End for Compile / Run AERMOD for LINE ######################################
+
+# Run AERMOD: BETA RLINE input
+def runAERMOD_B_RLINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+    ########### Compile / Run AERMOD for RLINE ############################################
+    RLINE_rec_path = rec_path
+    if run_AERMOD.get():
+        RLINE_em_path = em_path
+    RLINE_rd_path = road_path
+
+    RLINE_recdf = pd.read_csv(RLINE_rec_path)
+    RLINE_RECEPTORCOORD = "\n".join(('RE DISCCART ' + RLINE_recdf['coord_aer']).tolist())
+    if run_AERMOD.get():
+        RLINE_emdf = pd.read_csv(RLINE_em_path)
+        RLINE_LINKLOC = "\n".join(
+            ('SO LOCATION ' + RLINE_emdf['linkID_new'] + ' RLINE ' + RLINE_emdf['coord_aer'] + ' 0'))
+        RLINE_LINKCOORD = "** no nodes coord needed\n"
+        RLINE_SRCPARAMEM = "\n".join(('SO SRCPARAM ' + RLINE_emdf['linkID_new'] + ' ' + RLINE_emdf['em_aer'].map(
+            str) + ' 1.3 ' + RLINE_emdf['wd'].map(str) + ' 2'))
+    else:
+        RLINE_rddf = pd.read_csv(RLINE_rd_path)
+        RLINE_LINKLOC = "\n".join(
+            ('SO LOCATION ' + RLINE_rddf['linkID_new'] + ' RLINE ' + RLINE_rddf['coord_aer'] + ' 0'))
+        RLINE_LINKCOORD = "** no nodes coord needed\n"
+        RLINE_SRCPARAMEM = "\n".join(
+            ('SO SRCPARAM ' + RLINE_rddf['linkID_new'] + ' [emissionRate] 1.3 ' + RLINE_rddf['wd'].map(str) + ' 2'))
+    RLINE_RBARRIER = ''
+    content = TEMPLATE.format( \
+        AVERTIME=AVERTIME, \
+        URBANOPT=URBANOPT, \
+        FLAGPOLE=FLAGPOLE, \
+        POLLUTID=POLLUTID, \
+        LINK_LOCATION=RLINE_LINKLOC, \
+        SRCPARAM=RLINE_SRCPARAMEM, \
+        RBARRIER=RLINE_RBARRIER, \
+        LINKCOORD=RLINE_LINKCOORD, \
+        RECEPTORCOORD=RLINE_RECEPTORCOORD, \
+        file_sfc=os.path.basename(SURFFILE), \
+        file_pfl=os.path.basename(PROFFILE)
+    )
+    with open(output_path + "/aermod.inp", "w") as fp:
+        fp.write(content)
+    out_RLINE = 'RLINE_' + os.path.basename(RLINE_rd_path).split('.')[0] + '_' + POLLUTID + '_' + AVERTIME
+    shutil.copy(output_path + '/aermod.inp', output_path + '/' + out_RLINE + '.inp')
+    if run_AERMOD.get():
+        if not os.path.exists(output_path + '/aermod.exe'):
+            path = os.path.dirname(os.path.dirname(output_path))
+            shutil.copy(path + "/aermod.exe", output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(SURFFILE)):
+            shutil.copy(SURFFILE, output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(PROFFILE)):
+            shutil.copy(PROFFILE, output_path)
+        os.chdir(output_path)
+        os.system('aermod.exe')
+        shutil.copy('aermod.out', out_RLINE + '.out')
+
+# Run AERMOD: BETA RLINE input
+def runAERMOD_A_RLINEXT(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+    ########### Compile / Run AERMOD for RLINEXT ############################################
+    RLINEXT_rec_path = rec_path
+    if run_AERMOD.get():
+        RLINEXT_em_path = em_path
+    RLINEXT_rd_path = road_path
+    RLINEXT_RBARRIER = ''
+    RLINEXT_recdf = pd.read_csv(RLINEXT_rec_path)
+    RLINEXT_RECEPTORCOORD = "\n".join(('RE DISCCART ' + RLINEXT_recdf['coord_aer']).tolist())
+    if run_AERMOD.get():
+        RLINEXT_emdf = pd.read_csv(RLINEXT_em_path)
+        RLINEXT_emdf['wd'] = RLINEXT_emdf['bw']*2
+        RLINEXT_LINKLOC = "\n".join(('SO LOCATION ' + RLINEXT_emdf['linkID_new'] + ' RLINEXT ' + \
+                                     RLINEXT_emdf['coord_aer'].apply(lambda x: ' '.join(x.split(' ')[0:2] + \
+                                                                                        ['0'] + x.split(' ')[
+                                                                                                2:4])) + ' 0'))
+        RLINEXT_LINKCOORD = "** no nodes coord needed\n"
+        RLINEXT_SRCPARAMEM = "\n".join(('SO SRCPARAM ' + RLINEXT_emdf['linkID_new'] + ' ' + RLINEXT_emdf['em_aer'].map(
+            str) + ' 1.3 ' + RLINEXT_emdf['wd'].map(str) + ' 2'))
+        # RLINEXT_RBARRIER = "\n".join(('SO RBARRIER ' + RLINEXT_emdf['linkID_new'] + ' 3.5 ' + RLINEXT_emdf['bw'].apply(lambda x: -x-3).map(str)))
+    else:
+        RLINEXT_rddf = pd.read_csv(RLINEXT_rd_path)
+        RLINEXT_rddf['wd'] = RLINEXT_rddf['bw'] * 2
+        RLINEXT_LINKLOC = "\n".join(
+            ('SO LOCATION ' + RLINEXT_rddf['linkID_new'] + ' RLINEXT ' + RLINEXT_rddf['coord_aer'] + ' 0'))
+        RLINEXT_LINKCOORD = "** no nodes coord needed\n"
+        RLINEXT_SRCPARAMEM = "\n".join(
+            ('SO SRCPARAM ' + RLINEXT_rddf['linkID_new'] + ' [emissionRate] 1.3 ' + RLINEXT_rddf['wd'].map(str) + ' 2'))
+        # RLINEXT_RBARRIER = "\n".join(('SO RBARRIER ' + RLINEXT_rddf['linkID_new'] + ' 3.5 ' + RLINEXT_rddf['bw'].apply(lambda x: -x-3).map(str)))
+    content = TEMPLATE.format( \
+        AVERTIME=AVERTIME, \
+        URBANOPT=URBANOPT, \
+        FLAGPOLE=FLAGPOLE, \
+        POLLUTID=POLLUTID, \
+        LINK_LOCATION=RLINEXT_LINKLOC, \
+        SRCPARAM=RLINEXT_SRCPARAMEM, \
+        RBARRIER=RLINEXT_RBARRIER, \
+        LINKCOORD=RLINEXT_LINKCOORD, \
+        RECEPTORCOORD=RLINEXT_RECEPTORCOORD, \
+        file_sfc=os.path.basename(SURFFILE), \
+        file_pfl=os.path.basename(PROFFILE)
+    )
+    with open(output_path + "/aermod.inp", "w") as fp:
+        fp.write(content)
+    out_RLINEXT = 'RLINEXT_' + os.path.basename(RLINEXT_rd_path).split('.')[0] + '_' + POLLUTID + '_' + AVERTIME
+    shutil.copy(output_path + '/aermod.inp', output_path + '/' + out_RLINEXT + '.inp')
+    if run_AERMOD.get():
+        if not os.path.exists(output_path + '/aermod.exe'):
+            path = os.path.dirname(os.path.dirname(output_path))
+            shutil.copy(path + "/aermod.exe", output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(SURFFILE)):
+            shutil.copy(SURFFILE, output_path)
+        if not os.path.exists(output_path + '/' + os.path.basename(PROFFILE)):
+            shutil.copy(PROFFILE, output_path)
+        os.chdir(output_path)
+        os.system('aermod.exe')
+        shutil.copy('aermod.out', out_RLINEXT + '.out')
+
+
+
+# Generate and visualize results
+def generateResults(aermod_out, output_path):
+
+    ################## Result visualization #############################################################
+    aermod_out_fname = os.path.basename(aermod_out).split('.out')[0]
+    temp_conc1 = []
+    start = 0
+    realstart = 0
+    for line in (open(aermod_out).readlines()):
+        # print(line)
+        if ('HIGHEST' in line) and ('AVERAGE' in line) and ('CONCENTRATION' in line) and ('VALUES' in line):
+            start = 1
+            # print(line)
+            continue
+        if (start == 1) and ('- - - - -' in line):
+            realstart = 1
+            # print(line)
+            start = 2
+            continue
+        if (realstart == 1) and ('(' in line):
+            temp_conc1.append(line)
+            # print(line)
+        elif realstart == 1:
+            start = 0
+            realstart = 0
+        if 'THE MAXIMUM' in line:
+            break
+    con_df = pd.DataFrame(columns=['x', 'y', 'concentration'])
+    for conc_l in temp_conc1:
+        conc_l = conc_l.split()
+        # print(conc_l)
+        # conc_l = filter(None, conc_l)
+        if len(conc_l) > 7:
+            con_df.loc[len(con_df)] = [conc_l[0], conc_l[1], float(conc_l[2].replace("c", ""))]
+            con_df.loc[len(con_df)] = [conc_l[4], conc_l[5], float(conc_l[6].replace("c", ""))]
+        else:
+            con_df.loc[len(con_df)] = [conc_l[0], conc_l[1], float(conc_l[2].replace("c", ""))]
+    # print('storing and plotting concentration data...')
+    con_df.to_csv(output_path + '/' + aermod_out_fname + '.csv', index=False)
+    c_max = (con_df.concentration.max())
+
+    return c_max, con_df
+
+# Visualize the results
+def visualizeResults(c_min, c_max, con_df, aermod_out, rd_list, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
+    aermod_out_fname = os.path.basename(aermod_out).split('.out')[0]
+
+    # Visualize
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    xy = con_df[['x', 'y']].values
+    z = (con_df['concentration']).tolist()
+    # z = [zz for zz in (df_final[sce]).tolist()]
+    # xi = np.linspace(-600, 600, 1201)
+    grid_x, grid_y = np.mgrid[xref_left_m:xref_right_m:1001j, yref_lower_m:yref_higher_m:1001j]
+
+    zi = griddata(xy, z, (grid_x, grid_y), method='linear')
+
+    #vv = np.linspace(0, c_max, 31, endpoint=True)
+    vv = np.linspace(c_min, c_max, 31, endpoint=True)
+
+    hehe = plt.contourf(grid_x, grid_y, zi, vv, cmap=plt.get_cmap("rainbow"), extend="both",
+                        alpha=1)  # cmap=plt.get_cmap("rainbow"),
+
+    #vvv = np.linspace(0, c_max, 31, endpoint=True)
+    vvv = np.linspace(c_min, c_max, 31, endpoint=True)
+
+    plt.contour(grid_x, grid_y, zi, vvv, linewidths=0.01, colors='k')
+    plt.xlim(xref_left_m, xref_right_m)
+    plt.ylim(yref_lower_m, yref_higher_m)
+    plt.xticks(rotation=0)
+    plt.rc('xtick', labelsize=8)  # fontsize of the tick labels
+    plt.rc('ytick', labelsize=8)  # fontsize of the tick labels
+    rd_list.plot(ax=ax, color='black', alpha=0.5, linewidth=1)
+    plt.xlabel('meter')
+    plt.ylabel('meter')
+    ax.set_aspect('equal')
+    plt.colorbar(hehe)
+    plt.title(aermod_out_fname)
+    # plt.axis('off')
+    # plt.savefig(path + filename + '.png', dpi = 100)
+
+    return fig

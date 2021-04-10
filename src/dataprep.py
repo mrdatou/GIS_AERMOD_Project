@@ -66,7 +66,7 @@ def dataConversion(data):
     rd_edge = data.shoulder
 
     # Make directory for generated files
-    dir_name = os.path.dirname(data.path)
+    dir_name = os.path.dirname(os.path.dirname(data.path))
     fd_name = os.path.basename(data.path.split('.shp')[0])
     if not os.path.exists(dir_name + '/' + fd_name):
         os.makedirs(dir_name + '/' + fd_name)
