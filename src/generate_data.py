@@ -7,12 +7,113 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pyproj import Proj, transform
 from scipy.interpolate import griddata
 from shapely import geometry
 from shapely.geometry import LineString, MultiLineString, Point, Polygon
 import descartes
 
 from constants import TEMPLATE
+
+
+def GISextract(path):
+    try:
+        rd_list = gpd.read_file(path)
+    except:
+        raise
+        # import traceback
+        # traceback.print_exc()
+    else:
+        return rd_list, path
+
+
+# Convert GIS data for generating data
+def dataConversion(data):
+    # GIS data
+    rd_list = data.rd_list
+
+    # Set ESPG
+    from_proj = Proj(init=data.fromproj)
+    to_proj = Proj(init=data.toproj)
+
+    # Unit
+    if data.isFeet:
+        f2m = 0.3048
+    else:
+        f2m = 1
+
+    # Set boundary
+    y_higherb = data.yHigh
+    y_lowerb = data.yLow
+    x_leftb = data.xLeft
+    x_rightb = data.xRight
+
+    # Set reference point
+    x_0 = data.xRef
+    y_0 = data.yRef
+
+    ## GIS Road Unique ID
+    GISRdID = data.roadID
+    ## Road Type
+    L_tp = data.roadTp
+    ## number of Lane
+    L_num = data.numLane
+    ## lane width
+    L_wd = data.laneWid
+    ## Shoulder
+    rd_edge = data.shoulder
+
+    # Make directory for generated files
+    dir_name = os.path.dirname(os.path.dirname(data.path))
+    fd_name = os.path.basename(data.path.split('.shp')[0])
+    if not os.path.exists(dir_name + '/' + fd_name):
+        os.makedirs(dir_name + '/' + fd_name)
+        os.makedirs(dir_name + '/' + fd_name + '/results')
+
+    output_path = dir_name + '/' + fd_name + '/results'
+
+    x_0_f, y_0_f = transform(from_proj, to_proj, x_0, y_0)
+    x_leftb_f, y_higherb_f = transform(from_proj, to_proj, x_leftb, y_higherb)
+    x_rightb_f, y_lowerb_f = transform(from_proj, to_proj, x_rightb, y_lowerb)
+
+    xref_left_m = (x_leftb_f - x_0_f) * f2m
+    xref_right_m = (x_rightb_f - x_0_f) * f2m
+    yref_lower_m = (y_lowerb_f - y_0_f) * f2m
+    yref_higher_m = (y_higherb_f - y_0_f) * f2m
+
+    rd_list['wd'] = rd_list[L_num] * rd_list[L_wd] * f2m + rd_edge
+    rd_list['bw'] = rd_list['wd'] / 2
+    # Assign unique ID to each link
+    rd_list['linkID'] = range(1, len(rd_list) + 1)
+    lineStr_list = []
+    ii = 0
+    for i, row in rd_list.iterrows():
+        if (type(row.geometry) == LineString):
+            link_coo = row.geometry.coords[:]
+            x_m, y_m = (transform(from_proj, to_proj, [x[0] for x in link_coo], [x[1] for x in link_coo]))
+            x_m = list((np.array(x_m) - x_0_f) * f2m)
+            y_m = list((np.array(y_m) - y_0_f) * f2m)
+            geo_m = LineString(Point(xy) for xy in zip(x_m, y_m))
+            # rd_list.loc[i,'geometry'] = geo_m
+            lineStr_list.append(geo_m)
+        elif (type(row.geometry) == MultiLineString):
+            lineStr_list1 = []
+            print(type(row.geometry), row['linkID'], ' is multistrings.')
+            for subgeo in row.geometry:
+                link_coo = subgeo.coords[:]
+                x_m, y_m = (transform(from_proj, to_proj, [x[0] for x in link_coo], [x[1] for x in link_coo]))
+                x_m = list((np.array(x_m) - x_0_f) * f2m)
+                y_m = list((np.array(y_m) - y_0_f) * f2m)
+                # print(x_m,y_m)
+                geo_m = LineString(Point(xy) for xy in zip(x_m, y_m))
+                lineStr_list1.append(geo_m)
+                ii = i
+            lineStr_list.append(MultiLineString(lineStr_list1))
+    rd_list = gpd.GeoDataFrame(rd_list, geometry=lineStr_list)
+
+    print("Conversion finished")
+
+    return rd_list, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, output_path
 
 
 def generateLINE(data):
@@ -421,7 +522,8 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
                     # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
                     rec_rd['x'] = [x.coords[:][0][0] for x in points]
                     rec_rd['y'] = [y.coords[:][0][1] for y in points]
-                    rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str) + ' ' + str(round(rec_z, 1))
+                    rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(
+                        str) + ' ' + str(round(rec_z, 1))
                     frame.append(rec_rd.copy())
                     for interior in row.geometry.interiors:
                         rec_rd = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
@@ -451,7 +553,8 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
                         # rec_rd['rec_id'] = [rec_n + str(ii) for ii in range(1, len(rec_rd)+1)]
                         rec_rd['x'] = [x.coords[:][0][0] for x in points]
                         rec_rd['y'] = [y.coords[:][0][1] for y in points]
-                        rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(str) + ' ' + str(round(rec_z, 1))
+                        rec_rd['coord_aer'] = rec_rd['x'].round(1).astype(str) + ' ' + rec_rd['y'].round(1).astype(
+                            str) + ' ' + str(round(rec_z, 1))
                         frame.append(rec_rd.copy())
                         for interior in pg1.interiors:
                             rec_rd = gpd.GeoDataFrame(columns=['rec_id', 'geometry', 'x', 'y', 'coord_aer'])
@@ -595,7 +698,7 @@ def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, 
         df.to_csv(outputpath + '/emission' + '/em_AREA.csv', index=False)
 
     if LINE_em.get() or RLINEXT_em.get():
-        print("start line")
+        print("start line/ rlinext")
         df = pd.read_csv(outputpath + '/Line.csv')
         df1 = df[[GISRdID, 'area']]
         df1 = df1.groupby([GISRdID]).area.sum().reset_index()
@@ -623,8 +726,10 @@ def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, 
         df['em_aer'] = df['emrate'] / df['nn'] / 3600  # from meter to mile
         df.to_csv(outputpath + '/emission' + '/em_' + os.path.basename(VOLUME_file_path), index=False)
 
+
 # Run AERMOD: AREA input
-def runAERMOD_AREA(rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE, output_path):
+def runAERMOD_AREA(rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE,
+                   output_path):
     AREA_rec_path = rec_path
     if run_AERMOD.get():
         AREA_em_path = em_path
@@ -677,9 +782,10 @@ def runAERMOD_AREA(rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT,
         os.system('aermod.exe')
         shutil.copy('aermod.out', out_AREA + '.out')
 
-# Run AERMOD: VOLUME input
-def runAERMOD_VOLUME(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
 
+# Run AERMOD: VOLUME input
+def runAERMOD_VOLUME(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
+                     SURFFILE, PROFFILE):
     ##################Compile / Run AERMOD for VOLUME ##############################################
     VOLUME_rec_path = rec_path
     if run_AERMOD.get():
@@ -733,8 +839,10 @@ def runAERMOD_VOLUME(output_path, rec_path, road_path, run_AERMOD, em_path, AVER
         os.system('aermod.exe')
         shutil.copy('aermod.out', out_VOLUME + '.out')
 
+
 # Run AERMOD: LINE input
-def runAERMOD_LINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+def runAERMOD_LINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
+                   SURFFILE, PROFFILE):
     ########### Compile / Run AERMOD for LINE ############################################
     LINE_rec_path = rec_path
     if run_AERMOD.get():
@@ -787,8 +895,10 @@ def runAERMOD_LINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTI
         shutil.copy('aermod.out', out_LINE + '.out')
     ##################End for Compile / Run AERMOD for LINE ######################################
 
+
 # Run AERMOD: BETA RLINE input
-def runAERMOD_B_RLINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+def runAERMOD_B_RLINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
+                      SURFFILE, PROFFILE):
     ########### Compile / Run AERMOD for RLINE ############################################
     RLINE_rec_path = rec_path
     if run_AERMOD.get():
@@ -841,8 +951,10 @@ def runAERMOD_B_RLINE(output_path, rec_path, road_path, run_AERMOD, em_path, AVE
         os.system('aermod.exe')
         shutil.copy('aermod.out', out_RLINE + '.out')
 
+
 # Run AERMOD: BETA RLINE input
-def runAERMOD_A_RLINEXT(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID, SURFFILE, PROFFILE):
+def runAERMOD_A_RLINEXT(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
+                        SURFFILE, PROFFILE):
     ########### Compile / Run AERMOD for RLINEXT ############################################
     RLINEXT_rec_path = rec_path
     if run_AERMOD.get():
@@ -853,7 +965,7 @@ def runAERMOD_A_RLINEXT(output_path, rec_path, road_path, run_AERMOD, em_path, A
     RLINEXT_RECEPTORCOORD = "\n".join(('RE DISCCART ' + RLINEXT_recdf['coord_aer']).tolist())
     if run_AERMOD.get():
         RLINEXT_emdf = pd.read_csv(RLINEXT_em_path)
-        RLINEXT_emdf['wd'] = RLINEXT_emdf['bw']*2
+        RLINEXT_emdf['wd'] = RLINEXT_emdf['bw'] * 2
         RLINEXT_LINKLOC = "\n".join(('SO LOCATION ' + RLINEXT_emdf['linkID_new'] + ' RLINEXT ' + \
                                      RLINEXT_emdf['coord_aer'].apply(lambda x: ' '.join(x.split(' ')[0:2] + \
                                                                                         ['0'] + x.split(' ')[
@@ -901,10 +1013,8 @@ def runAERMOD_A_RLINEXT(output_path, rec_path, road_path, run_AERMOD, em_path, A
         shutil.copy('aermod.out', out_RLINEXT + '.out')
 
 
-
 # Generate and visualize results
 def generateResults(aermod_out, output_path):
-
     ################## Result visualization #############################################################
     aermod_out_fname = os.path.basename(aermod_out).split('.out')[0]
     temp_conc1 = []
@@ -945,6 +1055,7 @@ def generateResults(aermod_out, output_path):
 
     return c_max, con_df
 
+
 # Visualize the results
 def visualizeResults(c_min, c_max, con_df, aermod_out, rd_list, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
     aermod_out_fname = os.path.basename(aermod_out).split('.out')[0]
@@ -960,13 +1071,13 @@ def visualizeResults(c_min, c_max, con_df, aermod_out, rd_list, xref_left_m, xre
 
     zi = griddata(xy, z, (grid_x, grid_y), method='linear')
 
-    #vv = np.linspace(0, c_max, 31, endpoint=True)
+    # vv = np.linspace(0, c_max, 31, endpoint=True)
     vv = np.linspace(c_min, c_max, 31, endpoint=True)
 
     hehe = plt.contourf(grid_x, grid_y, zi, vv, cmap=plt.get_cmap("rainbow"), extend="both",
                         alpha=1)  # cmap=plt.get_cmap("rainbow"),
 
-    #vvv = np.linspace(0, c_max, 31, endpoint=True)
+    # vvv = np.linspace(0, c_max, 31, endpoint=True)
     vvv = np.linspace(c_min, c_max, 31, endpoint=True)
 
     plt.contour(grid_x, grid_y, zi, vvv, linewidths=0.01, colors='k')

@@ -1,9 +1,14 @@
+import concurrent.futures
 import os
+import queue
+import threading
 import tkinter as tk
 import tkinter.ttk as ttk
 import webbrowser
+from time import sleep
 from tkinter import filedialog
 from tkinter import font
+import center_tk_window
 
 import numpy as np
 import pandas as pd
@@ -12,8 +17,8 @@ from GISPlotWindow import GISplotWindow
 from PIL import Image, ImageTk
 from constants import RoadTabConstants, ReceptorsTabConstants, EmissionsTabConstants, CompilaionTabConstants, \
     ResultsTabConstants
-from dataprep import GISextract, dataConversion
-from generate_data import generateLINE, generateAREA, visualizeLINE, visualizeAREA, generateVOLUME, visualizeVOLUME, \
+from generate_data import GISextract, dataConversion, generateLINE, generateAREA, visualizeLINE, visualizeAREA, \
+    generateVOLUME, visualizeVOLUME, \
     generateReceptors, visualizeReceptors, generateEmissions, generateResults, runAERMOD_AREA, runAERMOD_VOLUME, \
     runAERMOD_LINE, runAERMOD_B_RLINE, runAERMOD_A_RLINEXT, visualizeResults
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
@@ -61,16 +66,37 @@ class Data:
     elevation = None
 
 
-class waitingWindow(tk.Toplevel):
-    def __init__(self, text, master=None):
+class Progressbar(tk.Toplevel):
+    def __init__(self, title, text, master=None):
         super().__init__(master)
 
-        self.lift()
+        self.label_font = tk.font.Font(size=13)
+
+        self.title(title)
+        self.geometry("400x50")
+        center_tk_window.center_on_screen(self)
+
+        # Set focus on this toplevel window
         self.focus_force()
         self.grab_set()
-        self.grab_release()
 
-        tk.Label(self, text=text).pack()
+        self.attributes('-disabled', True)
+
+        # Progress window message
+        tk.Label(self, text=text, font=self.label_font).pack(anchor=tk.W)
+
+        # Progress bar
+        self.progressbar = ttk.Progressbar(self, orient=tk.HORIZONTAL, mode='determinate', length=300)
+        self.progressbar.pack(expand=True)
+
+        self.progressbar.start()
+
+    def checkThreadStatus(self):
+        pass
+
+    def close(self):
+        self.progressbar.stop()
+        self.destroy()
 
 
 # Data Tab class inherit Data class to share data with other tabs
@@ -405,6 +431,9 @@ class DataTab(tk.Frame, Data):
         locateGraphWindow.title("Locate boundary and reference point")
         locateGraphWindow.geometry("890x530")
 
+        # Place the window in the center
+        center_tk_window.center_on_screen(locateGraphWindow)
+
         # Set GIS plot window with pop-up-window
         self.buildMapWindow(locateGraphWindow)
 
@@ -421,11 +450,21 @@ class DataTab(tk.Frame, Data):
     def btnVerify(self):
         # Check input values
         if self.checkInputErr():
-            #waiting = waitingWindow(master=self, text="Converting data...")
 
-            self.passInputToMain()
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Generating GIS coorfinate system...")
 
-            #waiting.destroy()
+            # Data conversion in another thread
+            thread_conversion = threading.Thread(name="conversion", target=self.passInputToMain)
+            thread_conversion.start()
+
+            def checkConversionThread():
+                if thread_conversion.is_alive():
+                    self.master.master.after(1000, checkConversionThread)
+                else:
+                    progressbar.close()
+
+            checkConversionThread()
 
     # Check input values when verify inputs button pressed
     def checkInputErr(self):
@@ -470,6 +509,7 @@ class DataTab(tk.Frame, Data):
 
     # Pass Data tab input to Main Window variables
     def passInputToMain(self):
+
         # GeoPandas data
         Data.rd_list = self.rd_list
 
@@ -645,7 +685,8 @@ class RoadTab(tk.Frame, Data):
         tk.Label(f_maxsize, text="Max Size (m) Should <= 8 m", font=self.label_font).grid(row=0, column=0)
 
         self.txt_maxsize_var = tk.StringVar()
-        self.txt_maxsize = tk.Entry(f_maxsize, textvariable=self.txt_maxsize_var, width=10, font=self.label_font, justify=tk.RIGHT)
+        self.txt_maxsize = tk.Entry(f_maxsize, textvariable=self.txt_maxsize_var, width=10, font=self.label_font,
+                                    justify=tk.RIGHT)
         self.txt_maxsize.grid(row=0, column=1)
 
         # Place Generate VOLUME button
@@ -665,6 +706,7 @@ class RoadTab(tk.Frame, Data):
 
         # Open pop up window
         graphicWin = tk.Toplevel(self)
+        center_tk_window.center_on_screen(graphicWin)
 
         # Set window title
         if index == RoadTabConstants.LINE:
@@ -679,19 +721,6 @@ class RoadTab(tk.Frame, Data):
             graphicWin.title("VOLUME Source Geometry")
             imgPath = RoadTabConstants.volGrapPath
 
-        # my_image = ImageTk.PhotoImage(file=imgPath)
-
-        '''
-        canvas = tk.Canvas(graphicWin, width=300, height=300)
-        canvas.pack(expand=True, fill='both')
-
-        img = Image.open(imgPath)
-        img = ImageTk.PhotoImage(img)
-        canvas.create_image(10, 10, image=img, anchor=tk.NW)
-        '''
-
-        #img = Image.open(imgPath)
-
         img_label = tk.Label(graphicWin, bg='black')
         img_label.image = tk.PhotoImage(file=imgPath)
         img_label['image'] = img_label.image
@@ -702,6 +731,7 @@ class RoadTab(tk.Frame, Data):
     # Control columns button
     def btnCol(self, index):
         colWin = tk.Toplevel(self)
+        center_tk_window.center_on_screen(colWin)
         # Line
         if index == 0:
             colWin.title("“Line.csv” Features Explained")
@@ -731,15 +761,58 @@ class RoadTab(tk.Frame, Data):
 
     # Control Generate button
     def btnGenerate(self, index):
+
         # Line
         if index == RoadTabConstants.LINE:
-            self.generateLINE()
+            progressbar = Progressbar("Processing", "Generating geometry of Line source...")
+            thread_generate = threading.Thread(name="genLINE", target=self.generateLINE)
+            thread_generate.start()
+
         # Area
         if index == RoadTabConstants.AREA:
-            self.generateAREA()
+            progressbar = Progressbar("Processing", "Generating geometry of AREA source...")
+            thread_generate = threading.Thread(name="genAREA", target=self.generateAREA)
+            thread_generate.start()
+
+            # self.generateAREA()
+
         # Volume
         if index == RoadTabConstants.VOLUME:
-            self.generateVOLUME()
+
+            # If the maxsize value is null
+            if self.txt_maxsize_var.get() == "":
+                tk.messagebox.showerror('showerror', "No max size input")
+                return
+            else:
+                # Transform maxsize var to float
+                maxsize = float(self.txt_maxsize_var.get())
+                if maxsize < 0:
+                    tk.messagebox.showerror('showerror', "Max size is negative")
+                    return
+                elif maxsize > 8:
+                    Msg_shoulder = tk.messagebox.askquestion('showwarning',
+                                                             "Max size is greater than 8.\n Do you want to proceed?")
+
+                    # Yes is selected to proceed
+                    if Msg_shoulder == 'no':
+                        return
+
+            progressbar = Progressbar("Processing", "Generating geometry of VOLUME source...")
+
+            Data.maxsize_var = maxsize
+
+            thread_generate = threading.Thread(name="genVOLUME", target=self.generateVOLUME)
+            thread_generate.start()
+
+            # self.generateVOLUME()
+
+        def checkGenerateThread():
+            if thread_generate.is_alive():
+                self.master.master.after(1000, checkGenerateThread)
+            else:
+                progressbar.close()
+
+        checkGenerateThread()
 
     # Generate LINE
     def generateLINE(self):
@@ -748,52 +821,76 @@ class RoadTab(tk.Frame, Data):
 
     # Generate AREA
     def generateAREA(self):
+
         generateAREA(Data.rd_list, Data.output_path, Data.roadID, Data.roadTp)
 
     # Generate VOLUME
     def generateVOLUME(self):
 
-        # If the maxsize value is null
-        if self.txt_maxsize_var.get() == "":
-            tk.messagebox.showerror('showerror', "No max size input")
-            return
-        else:
-            # Transform maxsize var to float
-            maxsize = float(self.txt_maxsize_var.get())
-            if maxsize < 0:
-                tk.messagebox.showerror('showerror', "Max size is negative")
-                return
-            elif maxsize > 8:
-                Msg_shoulder = tk.messagebox.askquestion('showwarning',
-                                                         "Max size is greater than 8.\n Do you want to proceed?")
-
-                # Yes is selected to proceed
-                if Msg_shoulder == 'no':
-                    return
-
-        Data.maxsize_var = maxsize
         generateVOLUME(Data.output_path, Data.rd_list, Data.maxsize_var, Data.roadID)
 
     # Control Visualize button
     def btnVisualize(self, index):
+
+        que = queue.Queue()
+
         # LINE
         if index == RoadTabConstants.LINE:
-            fig = visualizeLINE(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
-                                Data.yref_higher_m)
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Generating graph for Line source...")
+
             title = RoadTabConstants.visualize_title_LINE
+
+            # Data conversion in another thread
+            thread_visualize = threading.Thread(name="conversion",
+                                                target=lambda q: q.put(
+                                                    visualizeLINE(Data.output_path, Data.xref_left_m,
+                                                                  Data.xref_right_m, Data.yref_lower_m,
+                                                                  Data.yref_higher_m)), args=(que,))
+            thread_visualize.start()
+
         # AREA
         if index == RoadTabConstants.AREA:
-            fig = visualizeAREA(Data.output_path, Data.xref_left_m, Data.xref_right_m, Data.yref_lower_m,
-                                Data.yref_higher_m)
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Generating graph for AREA source...")
+
             title = RoadTabConstants.visualize_title_AREA
+
+            # Data conversion in another thread
+            thread_visualize = threading.Thread(name="conversion",
+                                                target=lambda q: q.put(
+                                                    visualizeAREA(Data.output_path, Data.xref_left_m,
+                                                                  Data.xref_right_m, Data.yref_lower_m,
+                                                                  Data.yref_higher_m)), args=(que,))
+            thread_visualize.start()
+
         # VOLUME
         if index == RoadTabConstants.VOLUME:
-            fig = visualizeVOLUME(Data.output_path, Data.rd_list, Data.maxsize_var, Data.xref_left_m, Data.xref_right_m,
-                                  Data.yref_lower_m,
-                                  Data.yref_higher_m)
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Generating graph for VOLUME source...")
+
             title = RoadTabConstants.visualize_title_VOLUME
 
-        # Open pop up window to show the output plot
+            # Data conversion in another thread
+            thread_visualize = threading.Thread(name="conversion",
+                                                target=lambda q: q.put(
+                                                    visualizeVOLUME(Data.output_path, Data.rd_list, Data.maxsize_var,
+                                                                    Data.xref_left_m, Data.xref_right_m,
+                                                                    Data.yref_lower_m,
+                                                                    Data.yref_higher_m)), args=(que,))
+            thread_visualize.start()
+
+        def checkVisualizeThread():
+            if thread_visualize.is_alive():
+                self.master.master.after(1000, checkVisualizeThread)
+            else:
+                self.vizualizeWindow(que.get(), title)
+                progressbar.close()
+
+        checkVisualizeThread()
+
+    # Visualize popup window
+    def vizualizeWindow(self, fig, title):
         visualizeWindow = tk.Toplevel(self)
         visualizeWindow.title(title)
         canvas = FigureCanvasTkAgg(fig, master=visualizeWindow)
@@ -801,6 +898,7 @@ class RoadTab(tk.Frame, Data):
         toolbar = NavigationToolbar2Tk(canvas, visualizeWindow)
         toolbar.update()
         toolbar.pack(anchor=tk.CENTER)
+        center_tk_window.center_on_screen(visualizeWindow)
 
 
 # Receptors tab class
@@ -838,14 +936,15 @@ class ReceptorsTab(tk.Frame, Data):
         # Place Receptor graphic example button
         self.button_recExample = ttk.Button(labelframe)
         self.button_recExample.configure(text="Graphic example", padding=10, default=tk.ACTIVE, width=15,
-                                          command=lambda: repr(
-                                              self.btnGraphicExample(ReceptorsTabConstants.recGrapPath)))
+                                         command=lambda: repr(
+                                             self.btnGraphicExample(ReceptorsTabConstants.recGrapPath)))
         self.button_recExample.grid(pady=10, sticky=tk.E)
 
     # Graphic example button control
     def btnGraphicExample(self, imgPath):
         # Open pop up window
         graphicWin = tk.Toplevel(self)
+        center_tk_window.center_on_screen(graphicWin)
         graphicWin.title("Near-road and Gridded Receptors")
 
         img_label = tk.Label(graphicWin, bg='black')
@@ -853,7 +952,6 @@ class ReceptorsTab(tk.Frame, Data):
         img_label['image'] = img_label.image
 
         img_label.pack()
-
 
     def createReceptorGenFrame(self):
         # Label
@@ -961,7 +1059,23 @@ class ReceptorsTab(tk.Frame, Data):
                 return
 
             # Generate receptor
-            self.generateRec(df)
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Generating near-road and gridded receptors...")
+
+            # Generate emission in another thread
+            thread_gen_rec = threading.Thread(name="generate_rec",
+                                              target=lambda: self.generateRec(df))
+            thread_gen_rec.start()
+
+            def checkGenRecThread():
+                if thread_gen_rec.is_alive():
+                    self.master.master.after(1000, checkGenRecThread)
+                else:
+                    progressbar.close()
+
+            checkGenRecThread()
+
+            # self.generateRec(df)
 
     # Check input of Receptor tab
     def checkInput(self):
@@ -1253,7 +1367,21 @@ class EmissionsTab(tk.Frame, Data):
     # Verify input and generate emission button
     def btnEm(self):
         if self.checkInput():
-            self.generateEmissions()
+
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Generating AERMOD emissions...")
+
+            # Generate emission in another thread
+            thread_gen_em = threading.Thread(name="generate_emission", target=self.generateEmissions)
+            thread_gen_em.start()
+
+            def checkThread():
+                if thread_gen_em.is_alive():
+                    self.master.master.after(1000, checkThread)
+                else:
+                    progressbar.close()
+
+            checkThread()
 
     # Check input for generate emissions
     def checkInput(self):
@@ -1370,7 +1498,8 @@ class CompilationTab(tk.Frame, Data):
 
         self.txt_urbanopt_var = tk.StringVar()
         self.txt_urbanopt_var.set('200000')
-        self.txt_urbanopt = tk.Entry(frame, textvariable=self.txt_urbanopt_var, width=10, font=self.label_font, justify=tk.RIGHT)
+        self.txt_urbanopt = tk.Entry(frame, textvariable=self.txt_urbanopt_var, width=10, font=self.label_font,
+                                     justify=tk.RIGHT)
         self.txt_urbanopt.grid(row=2, column=1, padx=10, pady=10)
 
         # FLAGPOLE
@@ -1379,7 +1508,8 @@ class CompilationTab(tk.Frame, Data):
 
         self.txt_flagpole_var = tk.StringVar()
         self.txt_flagpole_var.set('1.5')
-        self.txt_flagpole = tk.Entry(frame, textvariable=self.txt_flagpole_var, width=10, font=self.label_font, justify=tk.RIGHT)
+        self.txt_flagpole = tk.Entry(frame, textvariable=self.txt_flagpole_var, width=10, font=self.label_font,
+                                     justify=tk.RIGHT)
         self.txt_flagpole.grid(row=3, column=1, padx=10, pady=10)
 
         # SURFILE
@@ -1521,7 +1651,6 @@ class CompilationButtons(tk.Frame, Data):
 
     # Upload road button control
     def btn_UploadRoad(self):
-        print(Data.output_path)
 
         self.road_path = tk.filedialog.askopenfilename(initialdir=Data.output_path, title="Select file",
                                                        filetypes=(("csv files", "*.csv"), ("all files", "*.*"))
@@ -1559,49 +1688,106 @@ class CompilationButtons(tk.Frame, Data):
         PROFFILE = self.master.proffile
 
         # Input value check
-
         if self.checkInput(run_AERMOD, POLLUTID, AVERTIME, URBANOPT, FLAGPOLE, SURFFILE, PROFFILE) is not True:
             return
 
         # Run AERMOD: AREA input
         if self.title == "AREA":
-            print("AREA")
-            runAERMOD_AREA(self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME, URBANOPT, FLAGPOLE,
-                           POLLUTID, SURFFILE, PROFFILE, Data.output_path)
-            print(Data.output_path)
-            return
+            print(self.title)
+
+            progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD AREA")
+
+            # Run AERMOD: AREA thread
+            thread_aermod = threading.Thread(name="aermod_area",
+                                             target=lambda: runAERMOD_AREA(self.rec_path, self.road_path, run_AERMOD,
+                                                                           self.em_path,
+                                                                           AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
+                                                                           SURFFILE, PROFFILE, Data.output_path))
+            thread_aermod.start()
+
+            # runAERMOD_AREA(self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME, URBANOPT, FLAGPOLE,
+            #               POLLUTID, SURFFILE, PROFFILE, Data.output_path)
 
         # Run AERMOD: VOLUME
         if self.title == "VOLUME":
-            print("VOLUME")
-            runAERMOD_VOLUME(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
-                             URBANOPT, FLAGPOLE,
-                             POLLUTID, SURFFILE, PROFFILE)
-            return
+            print(self.title)
+
+            progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD VOLUME")
+
+            # Run AERMOD: VOLUME thread
+            thread_aermod = threading.Thread(name="aermod_vol",
+                                             target=lambda: runAERMOD_VOLUME(Data.output_path, self.rec_path,
+                                                                             self.road_path, run_AERMOD,
+                                                                             self.em_path, AVERTIME, URBANOPT, FLAGPOLE,
+                                                                             POLLUTID, SURFFILE, PROFFILE))
+            thread_aermod.start()
+
+            # runAERMOD_VOLUME(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
+            #                 URBANOPT, FLAGPOLE,
+            #                 POLLUTID, SURFFILE, PROFFILE)
 
         # Run AERMOD: LINE
         if self.title == "LINE":
-            print("LINE")
-            runAERMOD_LINE(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
-                           URBANOPT, FLAGPOLE,
-                           POLLUTID, SURFFILE, PROFFILE)
-            return
+            print(self.title)
+
+            progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD LINE")
+
+            # Run AERMOD: VOLUME thread
+            thread_aermod = threading.Thread(name="aermod_line",
+                                             target=lambda: runAERMOD_LINE(Data.output_path, self.rec_path,
+                                                                           self.road_path,
+                                                                           run_AERMOD, self.em_path, AVERTIME, URBANOPT,
+                                                                           FLAGPOLE, POLLUTID, SURFFILE, PROFFILE))
+            thread_aermod.start()
+
+            # runAERMOD_LINE(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
+            #               URBANOPT, FLAGPOLE,
+            #               POLLUTID, SURFFILE, PROFFILE)
 
         # Run AERMOD: BETA RLINE
         if self.title == "BETA RLINE":
-            print("BETA RLINE")
-            runAERMOD_B_RLINE(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
-                              URBANOPT, FLAGPOLE,
-                              POLLUTID, SURFFILE, PROFFILE)
-            return
+            print(self.title)
+
+            progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD RLINE")
+
+            # Run AERMOD: VOLUME thread
+            thread_aermod = threading.Thread(name="aermod_rline",
+                                             target=lambda: runAERMOD_B_RLINE(Data.output_path, self.rec_path,
+                                                                              self.road_path, run_AERMOD, self.em_path,
+                                                                              AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
+                                                                              SURFFILE, PROFFILE))
+            thread_aermod.start()
+
+            # runAERMOD_B_RLINE(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
+            #                  URBANOPT, FLAGPOLE,
+            #                  POLLUTID, SURFFILE, PROFFILE)
 
         # Run AERMOD: ALPHA RLINEXT
         if self.title == "ALPHA RLINEXT":
-            print("ALPHA RLINEXT")
-            runAERMOD_A_RLINEXT(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
-                                URBANOPT, FLAGPOLE,
-                                POLLUTID, SURFFILE, PROFFILE)
-            return
+            print(self.title)
+
+            progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD RLINEXT")
+
+            # Run AERMOD: VOLUME thread
+            thread_aermod = threading.Thread(name="aermod_rlinext",
+                                             target=lambda: runAERMOD_A_RLINEXT(Data.output_path, self.rec_path,
+                                                                                self.road_path,
+                                                                                run_AERMOD, self.em_path, AVERTIME,
+                                                                                URBANOPT,
+                                                                                FLAGPOLE, POLLUTID, SURFFILE, PROFFILE))
+            thread_aermod.start()
+
+            # runAERMOD_A_RLINEXT(Data.output_path, self.rec_path, self.road_path, run_AERMOD, self.em_path, AVERTIME,
+            #                    URBANOPT, FLAGPOLE,
+            #                    POLLUTID, SURFFILE, PROFFILE)
+
+        def checkAERMODThread():
+            if thread_aermod.is_alive():
+                self.master.master.after(1000, checkAERMODThread)
+            else:
+                progressbar.close()
+
+        checkAERMODThread()
 
     # Check input value
     def checkInput(self, run_AERMOD, POLLUTID, AVERTIME, URBANOPT, FLAGPOLE, SURFFILE, PROFFILE):
@@ -1674,7 +1860,7 @@ class ResultsTab(tk.Frame, Data):
         # Upload AERMOD .out file button
         self.btnAERMODout = ttk.Button(self)
         self.btnAERMODout.configure(text="Upload AERMOD ‘.out’ file\n and Organize into CSV", default=tk.ACTIVE,
-                                    padding=10, width=30,
+                                    padding=10, width=35,
                                     command=self.btn_uploadAERMODout)
         self.btnAERMODout.grid(row=1, column=0, padx=10, pady=10)
 
@@ -1709,14 +1895,14 @@ class ResultsTab(tk.Frame, Data):
         # Organize button
         self.btnOrganize = ttk.Button(self)
         self.btnOrganize.configure(text="Visualize concentration profile", default=tk.ACTIVE, padding=10,
-                                   width=30,
+                                   width=35,
                                    command=self.btn_organize)
         self.btnOrganize.grid(row=3, column=0, padx=10, pady=10)
 
         # Question button
         self.btnQuestions = ttk.Button(self)
         self.btnQuestions.configure(text="Questions?", default=tk.ACTIVE, padding=10,
-                                    width=30,
+                                    width=35,
                                     command=self.btn_questions)
         self.btnQuestions.grid(row=4, column=0, sticky=tk.S, padx=10, pady=10)
 
@@ -1728,6 +1914,10 @@ class ResultsTab(tk.Frame, Data):
                                                       )
 
         if os.path.exists(self.out_path):
+
+            # Progressbar window
+            progressbar = Progressbar("Processing", "Organizing AERMOD output into CSV file...")
+
             # Clear minVal and maxVal
             self.txt_minVal_var.set(0)
             self.txt_maxVal_var.set("")
@@ -1735,10 +1925,31 @@ class ResultsTab(tk.Frame, Data):
             # Set the out file path to the label
             self.label_AERMODout_var.set(self.out_path)
 
-            maxVal, self.con_df = generateResults(self.out_path, Data.output_path)
+            # Upload AERMOD .out and Organize into CSV in another thread
+            que = queue.Queue()
+
+            thread_aermod_out = threading.Thread(name="aermod_out",
+                                                 target=lambda q: q.put(
+                                                     generateResults(self.out_path, Data.output_path)), args=(que,))
+            thread_aermod_out.start()
+
+            def checkThreadOut():
+                if thread_aermod_out.is_alive():
+                    self.master.master.after(1000, checkThreadOut)
+                else:
+                    # Thread finished
+                    result = que.get()
+                    maxVal = result[0]
+                    self.con_df = result[1]
+                    self.txt_maxVal_var.set(maxVal)
+                    progressbar.close()
+
+            checkThreadOut()
+
+            # maxVal, self.con_df = generateResults(self.out_path, Data.output_path)
 
             # Set max val in the text box
-            self.txt_maxVal_var.set(maxVal)
+
 
     # Organize button control
     def btn_organize(self):
@@ -1757,20 +1968,48 @@ class ResultsTab(tk.Frame, Data):
             tk.messagebox.showerror('showerror', "The range values are invalid")
             return
 
-        fig = visualizeResults(minVal, maxVal, self.con_df, self.out_path, Data.rd_list, Data.xref_left_m,
-                               Data.xref_right_m, Data.yref_lower_m, Data.yref_higher_m)
+        # Progressbar window
+        progressbar = Progressbar("Processing", "Visualizing concentration profile...")
 
-        popupWindow = tk.Toplevel(self)
-        popupWindow.title("Concentration Profile Visualization")
-        canvas = FigureCanvasTkAgg(fig, master=popupWindow)
-        canvas.get_tk_widget().pack(expand=True, fill="both")
-        toolbar = NavigationToolbar2Tk(canvas, popupWindow)
-        toolbar.update()
-        toolbar.pack(anchor=tk.CENTER)
+        # Visualize concentration profile in another thread
+        que = queue.Queue()
+
+        thread_visualizeConc = threading.Thread(name="visualize_concentration",
+                                             target=lambda q: q.put(visualizeResults(minVal, maxVal, self.con_df, self.out_path,
+                                                                                     Data.rd_list, Data.xref_left_m, Data.xref_right_m,
+                                                                                     Data.yref_lower_m, Data.yref_higher_m)), args=(que,))
+        thread_visualizeConc.start()
+
+
+        #fig = visualizeResults(minVal, maxVal, self.con_df, self.out_path, Data.rd_list, Data.xref_left_m,
+        #                       Data.xref_right_m, Data.yref_lower_m, Data.yref_higher_m)
+
+        def checkConcThread():
+            if thread_visualizeConc.is_alive():
+                self.master.master.after(1000, checkConcThread)
+            else:
+                # Thread finished. Open visualizing window
+
+                fig = que.get()
+                popupWindow = tk.Toplevel(self)
+                center_tk_window.center_on_screen(popupWindow)
+                popupWindow.title("Concentration Profile Visualization")
+                canvas = FigureCanvasTkAgg(fig, master=popupWindow)
+                canvas.get_tk_widget().pack(expand=True, fill="both")
+                toolbar = NavigationToolbar2Tk(canvas, popupWindow)
+                toolbar.update()
+                toolbar.pack(anchor=tk.CENTER)
+
+                progressbar.close()
+
+        checkConcThread()
+
+
 
     # Questions button control
     def btn_questions(self):
         popupWindow = tk.Toplevel(self)
+        center_tk_window.center_on_screen(popupWindow)
         popupWindow.title("Concentration Profile Visualization")
         lst = ResultsTabConstants.questions
 
@@ -1788,6 +2027,9 @@ class MainWindow(tk.Tk):
         # Main window
         self.title("GTA (GIS-To-AERMOD) Tool")
         self.geometry("1100x750")
+
+        # Show window in the center of the screen
+        center_tk_window.center_on_screen(self)
 
         style = ttk.Style()
         style.configure('.', font=('', 14, 'bold'))
@@ -1821,12 +2063,11 @@ class MainWindow(tk.Tk):
 
         self.nb.pack(expand=True, fill="both")
 
+# def main():
+#    root = MainWindow()
 
-def main():
-    root = MainWindow()
-
-    root.mainloop()
+#    root.mainloop()
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#    main()
