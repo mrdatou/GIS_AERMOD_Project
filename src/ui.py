@@ -42,7 +42,7 @@ class Data:
     # EPSG setting
     fromproj = None  # EPSG from
     toproj = None  # EPSG to
-    isFeet = False  # Unit
+    isFeet = None  # Unit
 
     # Boundary and Reference point
     xRef = None  # Reference X
@@ -109,6 +109,10 @@ class DataTab(tk.Frame, Data):
 
         self.label_font = tk.font.Font(size=13)
 
+        # Flag if open shp file first time or not
+        self.isOpenSecond = tk.BooleanVar()
+        self.isOpenSecond.set(False)
+
         self.rd_list = None
 
         # Create Open, Import button and File Dialog
@@ -138,14 +142,26 @@ class DataTab(tk.Frame, Data):
 
     # Define Open button function
     def btnOpen(self):
+
+        # If shp file opened second time
+        if self.isOpenSecond.get():
+            Msg_shoulder = tk.messagebox.askquestion('',
+                                                     "shp file is already open. Want to open new shp file?")
+
+            # Yes is selected to proceed
+            if Msg_shoulder == 'no':
+                return
+
         # Choose shp file
         path = tk.filedialog.askopenfilename(initialdir=os.getcwd(), title="Select file",
                                              filetypes=(("shp files", "*.shp"), ("all files", "*.*"))
                                              )
 
         if os.path.exists(path):
+            # print("path exist")
             # Clear all values of old shp file
-            self.clearAllVals()
+            if self.isOpenSecond.get():
+                self.clearAllVals()
 
             # shp file exists
             Data.path = path
@@ -155,6 +171,9 @@ class DataTab(tk.Frame, Data):
 
             # Build file setting's drop down menus
             self.buildDropDownMenuSetting()
+
+            # Flag of open shp file second time is True
+            self.isOpenSecond.set(True)
 
     # Clear all values of shp file
     def clearAllVals(self):
@@ -178,6 +197,35 @@ class DataTab(tk.Frame, Data):
         self.txt_yHigh_var.set("")
         self.txt_xRef_var.set("")
         self.txt_yRef_var.set("")
+
+        # Data class values
+        Data.rd_list = None  # GeoPandas
+        Data.path = None  # Imported shp File's location
+        Data.output_path = None  # Output file's location path
+        Data.roadID = None  # Road ID
+        Data.roadTp = None  # Road Type
+        Data.numLane = None  # Num of Lanes
+        Data.laneWid = None  # Lane width
+        Data.shoulder = None  # Shoulder
+        Data.geom = None  # Geometry
+        Data.fromproj = None  # EPSG from
+        Data.toproj = None  # EPSG to
+        Data.isFeet = None  # Unit
+        Data.xRef = None  # Reference X
+        Data.yRef = None  # Reference Y
+        Data.yHigh = None  # Y high
+        Data.yLow = None  # Y low
+        Data.xLeft = None  # X left
+        Data.xRight = None  # X right
+        Data.xref_left_m = None
+        Data.xref_right_m = None
+        Data.yref_lower_m = None
+        Data.yref_higher_m = None
+        Data.maxsize_var = None
+        Data.interval = None
+        Data.elevation = None
+
+        # print(Data.rd_list)
 
     # Setting Dropdown menu of File setting frame
     def buildDropDownMenuSetting(self):
@@ -448,6 +496,9 @@ class DataTab(tk.Frame, Data):
 
     # Verify inputs button
     def btnVerify(self):
+        # Set test input (This is for test!!!)
+        #self.setTestInput()
+
         # Check input values
         if self.checkInputErr():
 
@@ -466,6 +517,24 @@ class DataTab(tk.Frame, Data):
 
             checkConversionThread()
 
+    # Set test input for test Should be disabled when not testing
+    def setTestInput(self):
+        self.combo_roadID.set("A_B")
+        self.combo_roadTp.set("rdtype_aer")
+        self.combo_numLane.set("LANES")
+        self.combo_laneWid.set("lane_width")
+        self.combo_geom.set("geometry")
+        self.txt_shoulder_var.set("1")
+        self.txt_fromproj_var.set("2240")
+        self.txt_toproj_var.set("2240")
+        self.bln_f.set(True)
+        self.txt_xRef_var.set("2245379.696")
+        self.txt_yRef_var.set("1393239.2335")
+        self.txt_xLeft_var.set("2243303.739")
+        self.txt_xRight_var.set("2247455.653")
+        self.txt_yLow_var.set("1391045.639")
+        self.txt_yHigh_var.set("1395432.828")
+
     # Check input values when verify inputs button pressed
     def checkInputErr(self):
 
@@ -477,33 +546,47 @@ class DataTab(tk.Frame, Data):
 
         # Check if columns are chosen
         if self.combo_roadID.get() == "" or self.combo_roadTp.get() == "" or self.combo_numLane.get() == "" or self.combo_laneWid.get() == "" or self.combo_geom.get() == "":
-            errMsg += "Column value is not selected"
+            errMsg += "1. Column value is not selected"
             errFlag = False
 
         if self.txt_shoulder_var.get() == "":
             errMsg += "\n No shoulder value"
             errFlag = False
         else:
-            shoulder = float(self.txt_shoulder_var.get())
-            if shoulder < 0:
-                # Give warning if shoulder is greater than 8
-                errMsg += "\n Shoulder value is negative"
+
+            try:
+                shoulder = float(self.txt_shoulder_var.get())
+                if shoulder < 0:
+                    # Give warning if shoulder is greater than 8
+                    errMsg += "\n 1. Shoulder should be nonnegative"
+                    errFlag = False
+            except ValueError:
+                errMsg += "\n 1. Shoulder should be number(float)"
                 errFlag = False
 
         if self.txt_fromproj_var.get() == "" or self.txt_toproj_var.get() == "":
-            errMsg += "\n ESPG value is missed"
+            errMsg += "\n 2. ESPG value is missed"
             errFlag = False
 
+        else:
+
+            try:
+                a = int(self.txt_fromproj_var.get())
+                b = int(self.txt_toproj_var.get())
+            except ValueError:
+                errMsg += "\n 2. EPSG should be integer"
+                errFlag = False
+
         if self.bln_f is False and self.bln_m is False:
-            errMsg += "\n No unit selected"
+            errMsg += "\n 2. No unit selected"
             errFlag = False
 
         if self.txt_xRef_var.get() == "" or self.txt_yRef_var.get() == "" or self.txt_yHigh_var.get() == "" or self.txt_yLow_var.get() == "" or self.txt_xLeft_var.get() == "" or self.txt_xRight_var.get() == "":
-            errMsg += "\n Boundary and Reference point missed"
+            errMsg += "\n 3. Boundary and Reference point is missed"
             errFlag = False
 
         if errFlag is not True:
-            tk.messagebox.showerror('showerror', errMsg)
+            tk.messagebox.showerror('Error', errMsg)
 
         return errFlag
 
@@ -525,10 +608,11 @@ class DataTab(tk.Frame, Data):
         Data.fromproj = 'epsg:' + self.txt_fromproj_var.get()  # ESPG from
         Data.toproj = 'epsg:' + self.txt_toproj_var.get()  # ESPG to
 
-        if self.bln_m:
-            Data.isFeet = False  # Unit
-        elif self.bln_f:
-            Data.isFeet = True
+        Data.isFeet = tk.BooleanVar()
+        if self.bln_f:
+            Data.isFeet.set(True)
+        else:
+            Data.isFeet.set(False)
 
         # Boundary and Reference point
         Data.xRef = float(self.txt_xRef_var.get())  # Reference X
@@ -706,7 +790,7 @@ class RoadTab(tk.Frame, Data):
 
         # Open pop up window
         graphicWin = tk.Toplevel(self)
-        center_tk_window.center_on_screen(graphicWin)
+        #center_tk_window.center_on_screen(graphicWin)
 
         # Set window title
         if index == RoadTabConstants.LINE:
@@ -731,7 +815,7 @@ class RoadTab(tk.Frame, Data):
     # Control columns button
     def btnCol(self, index):
         colWin = tk.Toplevel(self)
-        center_tk_window.center_on_screen(colWin)
+        #center_tk_window.center_on_screen(colWin)
         # Line
         if index == 0:
             colWin.title("“Line.csv” Features Explained")
@@ -781,17 +865,24 @@ class RoadTab(tk.Frame, Data):
 
             # If the maxsize value is null
             if self.txt_maxsize_var.get() == "":
-                tk.messagebox.showerror('showerror', "No max size input")
+                tk.messagebox.showerror('Error', "No max size input")
                 return
             else:
                 # Transform maxsize var to float
-                maxsize = float(self.txt_maxsize_var.get())
-                if maxsize < 0:
-                    tk.messagebox.showerror('showerror', "Max size is negative")
+                try:
+                    maxsize = float(self.txt_maxsize_var.get())
+                except ValueError:
+                    tk.messagebox.showerror('Error', "Max size should be number")
                     return
-                elif maxsize > 8:
-                    Msg_shoulder = tk.messagebox.askquestion('showwarning',
-                                                             "Max size is greater than 8.\n Do you want to proceed?")
+
+                if maxsize < 0:
+                    tk.messagebox.showerror('Error', "Max size should be nonnegative number")
+                    return
+                elif maxsize > 8 or maxsize < 1:
+                    Msg_shoulder = tk.messagebox.askquestion('Error',
+                                                             "Maz Size should be any flow larger than 1 m," +
+                                                             "\n and recommended to be no larger than 8 m. " +
+                                                             "\n Do you want to proceed?")
 
                     # Yes is selected to proceed
                     if Msg_shoulder == 'no':
@@ -944,7 +1035,7 @@ class ReceptorsTab(tk.Frame, Data):
     def btnGraphicExample(self, imgPath):
         # Open pop up window
         graphicWin = tk.Toplevel(self)
-        center_tk_window.center_on_screen(graphicWin)
+        #center_tk_window.center_on_screen(graphicWin)
         graphicWin.title("Near-road and Gridded Receptors")
 
         img_label = tk.Label(graphicWin, bg='black')
@@ -1033,6 +1124,10 @@ class ReceptorsTab(tk.Frame, Data):
 
     # Generate receptors button control
     def btnGenerateRec(self):
+
+        # Input test values (Remove when not testing!!!)
+        # self.setTestValues()
+
         if self.checkInput():
             # Transform list data of receptor to dataframe
             output_list = self.sheet.get_sheet_data(return_copy=False, get_header=False, get_index=False)
@@ -1055,7 +1150,7 @@ class ReceptorsTab(tk.Frame, Data):
 
             # Check if receptor data has no row
             if df.size == 0:
-                tk.messagebox.showerror('showerror', "The receptor dataframe does not have data")
+                tk.messagebox.showerror('Error', "The receptor dataframe does not have data")
                 return
 
             # Generate receptor
@@ -1077,6 +1172,11 @@ class ReceptorsTab(tk.Frame, Data):
 
             # self.generateRec(df)
 
+    # Input test values
+    def setTestValues(self):
+        self.entry_interval = "200"
+        self.entry_elevation = "1.5"
+
     # Check input of Receptor tab
     def checkInput(self):
         errFlag = True
@@ -1085,26 +1185,42 @@ class ReceptorsTab(tk.Frame, Data):
         # Check rd_list is not None
         if Data.rd_list is None:
             errFlag = False
-            errMsg += " No road data imported"
+            errMsg += " 1.1. No road data imported"
 
         # Check interval
         if self.entry_interval.get() == "":
             errFlag = False
-            errMsg += "\n No interval value"
+            errMsg += "\n 2. No interval value"
         else:
             # Transform value to float
-            Data.interval = float(self.entry_interval.get())
+            try:
+                interval = float(self.entry_interval.get())
+
+                if interval < 0:
+                    errFlag = False
+                    errMsg += "\n 2. SG should be positive number (float)."
+                else:
+                    Data.interval = interval
+
+            except ValueError:
+                errFlag = False
+                errMsg += "\n 2. SG should be positive number (float)."
 
         # Check elevations
         if self.entry_elevation.get() == "":
             errFlag = False
-            errMsg += "\n No elevation value"
+            errMsg += "\n 3. No elevation value"
         else:
             # Transform value to float
-            Data.elevation = float(self.entry_elevation.get())
+            try:
+                Data.elevation = float(self.entry_elevation.get())
+
+            except ValueError:
+                errFlag = False
+                errMsg += "\n 3. Receptor elevation should be number (float)."
 
         if errFlag is not True:
-            tk.messagebox.showerror('showerror', errMsg)
+            tk.messagebox.showerror('Error', errMsg)
 
         return errFlag
 
@@ -1806,10 +1922,27 @@ class CompilationButtons(tk.Frame, Data):
         if URBANOPT == "":
             errMsg += "\n No URBANOPT value"
             errFlag = False
+        else:
+            # URBANOPT is not integer
+            try:
+                int(URBANOPT)
+            except ValueError:
+                errMsg += "\n URBANOPT should be a positive integer. "
+                errFlag = False
 
         if FLAGPOLE == "":
             errMsg += "\n No FLAGPOLE value"
             errFlag = False
+        else:
+            # FLAGPOLE is not positive float
+            try:
+                flag = float(FLAGPOLE)
+                if flag < 0:
+                    errMsg += "\n FLAGPOLE should be a positive number (float). "
+                    errFlag = False
+            except ValueError:
+                errMsg += "\n FLAGPOLE should be a positive number (float). "
+                errFlag = False
 
         if SURFFILE is None or SURFFILE == "":
             errMsg += "\n No SURFFILE file is selected"
@@ -1834,7 +1967,7 @@ class CompilationButtons(tk.Frame, Data):
                 errFlag = False
 
         if errFlag is not True:
-            tk.messagebox.showerror('showerror', errMsg)
+            tk.messagebox.showerror('Error', errMsg)
 
         return errFlag
 
@@ -1950,22 +2083,25 @@ class ResultsTab(tk.Frame, Data):
 
             # Set max val in the text box
 
-
     # Organize button control
     def btn_organize(self):
         if self.out_path is None or self.out_path == "":
-            tk.messagebox.showerror('showerror', "out file is not selected")
+            tk.messagebox.showerror('Error', "out file is not selected")
             return
 
         if self.txt_minVal_var == "" or self.txt_maxVal_var == "":
-            tk.messagebox.showerror('showerror', "Max or Min Value is missed")
+            tk.messagebox.showerror('Error', "Max or Min Value is missed")
             return
 
-        minVal = float(self.txt_minVal_var.get())
-        maxVal = float(self.txt_maxVal_var.get())
+        try:
+            minVal = float(self.txt_minVal_var.get())
+            maxVal = float(self.txt_maxVal_var.get())
+        except ValueError:
+            tk.messagebox.showerror('Error', "Concentration values should be numbers.")
+            return
 
         if minVal > maxVal:
-            tk.messagebox.showerror('showerror', "The range values are invalid")
+            tk.messagebox.showerror('Error', "The range values are invalid")
             return
 
         # Progressbar window
@@ -1975,13 +2111,14 @@ class ResultsTab(tk.Frame, Data):
         que = queue.Queue()
 
         thread_visualizeConc = threading.Thread(name="visualize_concentration",
-                                             target=lambda q: q.put(visualizeResults(minVal, maxVal, self.con_df, self.out_path,
-                                                                                     Data.rd_list, Data.xref_left_m, Data.xref_right_m,
-                                                                                     Data.yref_lower_m, Data.yref_higher_m)), args=(que,))
+                                                target=lambda q: q.put(
+                                                    visualizeResults(minVal, maxVal, self.con_df, self.out_path,
+                                                                     Data.rd_list, Data.xref_left_m, Data.xref_right_m,
+                                                                     Data.yref_lower_m, Data.yref_higher_m)),
+                                                args=(que,))
         thread_visualizeConc.start()
 
-
-        #fig = visualizeResults(minVal, maxVal, self.con_df, self.out_path, Data.rd_list, Data.xref_left_m,
+        # fig = visualizeResults(minVal, maxVal, self.con_df, self.out_path, Data.rd_list, Data.xref_left_m,
         #                       Data.xref_right_m, Data.yref_lower_m, Data.yref_higher_m)
 
         def checkConcThread():
@@ -2003,8 +2140,6 @@ class ResultsTab(tk.Frame, Data):
                 progressbar.close()
 
         checkConcThread()
-
-
 
     # Questions button control
     def btn_questions(self):

@@ -37,7 +37,7 @@ def dataConversion(data):
     to_proj = Proj(init=data.toproj)
 
     # Unit
-    if data.isFeet:
+    if data.isFeet.get():
         f2m = 0.3048
     else:
         f2m = 1
@@ -81,6 +81,12 @@ def dataConversion(data):
     yref_lower_m = (y_lowerb_f - y_0_f) * f2m
     yref_higher_m = (y_higherb_f - y_0_f) * f2m
 
+
+    print(f2m)
+    print(L_wd)
+    print(L_num)
+    print(rd_edge)
+
     rd_list['wd'] = rd_list[L_num] * rd_list[L_wd] * f2m + rd_edge
     rd_list['bw'] = rd_list['wd'] / 2
     # Assign unique ID to each link
@@ -113,6 +119,8 @@ def dataConversion(data):
 
     print("Conversion finished")
 
+    print(rd_list)
+
     return rd_list, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, output_path
 
 
@@ -128,6 +136,11 @@ def generateLINE(data):
     GISRdID = data.roadID
     L_tp = data.roadTp
     output_path = data.output_path
+
+    print("data check")
+    print(rd_list)
+    print(GISRdID)
+    print(L_tp)
 
     for i, row in rd_list.iterrows():
         if (type(row.geometry) == LineString):
@@ -302,7 +315,6 @@ def geo_area(geo_m, wd):
 
 # Visualizing AREA
 def visualizeAREA(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m):
-    show_receptor = False
 
     def add_polygon_from_poly(row):
         xxxx = row['poly'].split('((')[1].split('))')[0].split(', ')
@@ -330,6 +342,10 @@ def visualizeAREA(output_path, xref_left_m, xref_right_m, yref_lower_m, yref_hig
 
 # Generate VOLUME
 def generateVOLUME(output_path, rd_list, max_vol, GISRdID):
+
+    print("data check")
+    print(max_vol)
+
     # output path = path + fd_name
 
     # max_vol = 10.0  # [5,7.9,80]
@@ -480,15 +496,27 @@ def add_polygon_from_poly(row):
 # Generate receptors
 def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yref_lower_m, yref_higher_m, rec_lyr,
                       rec_grid_interval, rec_z):
-    # rec_lyr = rec_lyr[rec_lyr['F_LTYPE'].isin(rd_list[L_tp].unique())].reset_index(drop=True)
+    rec_lyr = rec_lyr[rec_lyr['F_LTYPE'].isin(rd_list[L_tp].unique())].reset_index(drop=True)
     ###########################################################################################
     ###################################################################
     # 2. Receptor Module: Generate receptor layers
     ###################################################################
     # Intervals of gridded receptors in meters
-    print('')
     print('Generate the near-road receptor...')
-    print('Generating near road receptors...')
+
+    '''
+    print("rd_list:")
+    print(rd_list)
+    print("rec_lyr:")
+    print(rec_lyr)
+    print("L_tp:")
+    print(L_tp)
+    print("Interval:")
+    print(rec_grid_interval)
+    print("Elevation:")
+    print(rec_z)
+    '''
+
     ## 2.1. Generate near road receptors
     # Input needed below!!
     # Also, please define receptor layers in 'receptor_layers.csv' for each road type
@@ -575,9 +603,7 @@ def generateReceptors(rd_list, output_path, L_tp, xref_left_m, xref_right_m, yre
             df1['rec_id'] = [rec_n + str(ii) for ii in range(1, len(df1) + 1)]
             frame_tt.append(df1)
 
-    # Delete!!
-    print(type(frame_tt))
-    print(len(frame_tt))
+
 
     rec_rd = pd.DataFrame(pd.concat(frame_tt))
     rec_rd = rec_rd[['rec_id', 'geometry', 'x', 'y', 'coord_aer']]
@@ -672,10 +698,14 @@ def generateEmissions(AREA_em, LINE_em, RLINEXT_em, VOLUME_em, isLink, rd_list, 
     # However, generated road geometry files has to be generated before running Emission Module
     em_unit = 'g/mile/hr'  # g/mile/hr or g/link/hr
 
-    print("start")
+    print("data check")
+    print(VOLUME_em.get())
+    print(isLink.get())
+    print(rd_list)
+    print(Em)
 
     rd_list['length_m'] = rd_list['geometry'].length
-    if isLink:
+    if isLink.get():
         rd_list['emrate'] = rd_list[Em]
     else:
         rd_list['emrate'] = rd_list[Em] * (rd_list['length_m'] * 0.000621371)
@@ -786,6 +816,9 @@ def runAERMOD_AREA(rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT,
 # Run AERMOD: VOLUME input
 def runAERMOD_VOLUME(output_path, rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT, FLAGPOLE, POLLUTID,
                      SURFFILE, PROFFILE):
+
+    print("Run AERMOD")
+    print(run_AERMOD.get())
     ##################Compile / Run AERMOD for VOLUME ##############################################
     VOLUME_rec_path = rec_path
     if run_AERMOD.get():
@@ -810,19 +843,23 @@ def runAERMOD_VOLUME(output_path, rec_path, road_path, run_AERMOD, em_path, AVER
             ('SO SRCPARAM ' + VOLUME_rddf['linkID_new'] + ' [emissionRate] 1.3 ' + VOLUME_rddf['yinit'].map(
                 str) + ' 2'))
     VOLUME_RBARRIER = ''
-    content = TEMPLATE.format( \
-        AVERTIME=AVERTIME, \
-        URBANOPT=URBANOPT, \
-        FLAGPOLE=FLAGPOLE, \
-        POLLUTID=POLLUTID, \
-        LINK_LOCATION=VOLUME_LINKLOC, \
-        SRCPARAM=VOLUME_SRCPARAMEM, \
-        RBARRIER=VOLUME_RBARRIER, \
-        LINKCOORD=VOLUME_LINKCOORD, \
-        RECEPTORCOORD=VOLUME_RECEPTORCOORD, \
-        file_sfc=os.path.basename(SURFFILE), \
+    content = TEMPLATE.format(\
+        AVERTIME=AVERTIME,\
+        URBANOPT=URBANOPT,\
+        FLAGPOLE=FLAGPOLE,\
+        POLLUTID=POLLUTID,\
+        LINK_LOCATION=VOLUME_LINKLOC,\
+        SRCPARAM=VOLUME_SRCPARAMEM,\
+        RBARRIER=VOLUME_RBARRIER,\
+        LINKCOORD=VOLUME_LINKCOORD,\
+        RECEPTORCOORD=VOLUME_RECEPTORCOORD,\
+        file_sfc=os.path.basename(SURFFILE),\
         file_pfl=os.path.basename(PROFFILE)
     )
+
+    print("content")
+    print(content)
+
     with open(output_path + "/aermod.inp", "w") as fp:
         fp.write(content)
     out_VOLUME = os.path.basename(VOLUME_rd_path).split('.')[0] + '_' + POLLUTID + '_' + AVERTIME
@@ -1052,6 +1089,10 @@ def generateResults(aermod_out, output_path):
     # print('storing and plotting concentration data...')
     con_df.to_csv(output_path + '/' + aermod_out_fname + '.csv', index=False)
     c_max = (con_df.concentration.max())
+
+    print(con_df)
+
+    print(c_max)
 
     return c_max, con_df
 
