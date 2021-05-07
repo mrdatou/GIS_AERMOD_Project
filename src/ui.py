@@ -503,7 +503,7 @@ class DataTab(tk.Frame, Data):
         if self.checkInputErr():
 
             # Progressbar window
-            progressbar = Progressbar("Processing", "Generating GIS coorfinate system...")
+            progressbar = Progressbar("Processing", "Generating GIS coordinate system...")
 
             # Data conversion in another thread
             thread_conversion = threading.Thread(name="conversion", target=self.passInputToMain)
@@ -790,7 +790,7 @@ class RoadTab(tk.Frame, Data):
 
         # Open pop up window
         graphicWin = tk.Toplevel(self)
-        #center_tk_window.center_on_screen(graphicWin)
+
 
         # Set window title
         if index == RoadTabConstants.LINE:
@@ -811,11 +811,13 @@ class RoadTab(tk.Frame, Data):
 
         img_label.pack()
 
+        center_tk_window.center_on_screen(graphicWin)
+
     # Index LINE=0, AREA=1, VOLUME=2
     # Control columns button
     def btnCol(self, index):
         colWin = tk.Toplevel(self)
-        #center_tk_window.center_on_screen(colWin)
+
         # Line
         if index == 0:
             colWin.title("“Line.csv” Features Explained")
@@ -842,6 +844,8 @@ class RoadTab(tk.Frame, Data):
             tk.Label(frame, text=c_1, font=self.label_font, fg=col[2]).grid(sticky=tk.W, row=i, column=1)
 
             i += 1
+
+        center_tk_window.center_on_screen(colWin)
 
     # Control Generate button
     def btnGenerate(self, index):
@@ -1247,6 +1251,7 @@ class ReceptorsTab(tk.Frame, Data):
         toolbar = NavigationToolbar2Tk(canvas, visualizeWindow)
         toolbar.update()
         toolbar.pack(anchor=tk.CENTER)
+        center_tk_window.center_on_screen(visualizeWindow)
 
 
 # Receptor table class
@@ -2144,7 +2149,6 @@ class ResultsTab(tk.Frame, Data):
     # Questions button control
     def btn_questions(self):
         popupWindow = tk.Toplevel(self)
-        center_tk_window.center_on_screen(popupWindow)
         popupWindow.title("Concentration Profile Visualization")
         lst = ResultsTabConstants.questions
 
@@ -2152,6 +2156,8 @@ class ResultsTab(tk.Frame, Data):
         for col in lst:
             label = tk.Label(popupWindow, text=col, font=self.label_font, wraplength=300, anchor=tk.W, justify=tk.LEFT)
             label.grid(sticky=tk.W)
+
+        center_tk_window.center_on_screen(popupWindow)
 
 
 # Main window class

@@ -350,7 +350,6 @@ def generateVOLUME(output_path, rd_list, max_vol, GISRdID):
 
     # max_vol = 10.0  # [5,7.9,80]
     method = 'VOLUME'
-    print('')
     print('Convert road GIS to VOLUME source..')
     st = time.time()
     rd_list['voln'] = 0
@@ -802,7 +801,6 @@ def runAERMOD_AREA(rec_path, road_path, run_AERMOD, em_path, AVERTIME, URBANOPT,
     if run_AERMOD.get():
         if not os.path.exists(output_path + '/aermod.exe'):
             path = os.path.dirname(os.path.dirname(output_path))
-            print(path)
             shutil.copy(path + "/aermod.exe", output_path)
         if not os.path.exists(output_path + '/' + os.path.basename(SURFFILE)):
             shutil.copy(SURFFILE, output_path)
