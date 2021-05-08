@@ -1,4 +1,5 @@
 import concurrent.futures
+import multiprocessing
 import os
 import queue
 import threading
@@ -850,6 +851,11 @@ class RoadTab(tk.Frame, Data):
     # Control Generate button
     def btnGenerate(self, index):
 
+        # Check if GIS data is imported
+        if Data.rd_list is None:
+            tk.messagebox.showerror('Error', 'Covert GIS first in Data Tab')
+            return
+
         # Line
         if index == RoadTabConstants.LINE:
             progressbar = Progressbar("Processing", "Generating geometry of Line source...")
@@ -927,10 +933,26 @@ class RoadTab(tk.Frame, Data):
     # Control Visualize button
     def btnVisualize(self, index):
 
+        # Check if rd_list is imported
+        if Data.rd_list is None:
+            tk.messagebox.showerror('Error', 'Covert GIS first in Data Tab')
+            return
+
         que = queue.Queue()
 
         # LINE
         if index == RoadTabConstants.LINE:
+            """
+            progressbar = Progressbar("Processing", "Generating graph for Line source...")
+
+            que = multiprocessing.Queue()
+
+            thread_visualize = multiprocessing.Process(None, visualizeLINE(Data.output_path, Data.xref_left_m,
+                                                                  Data.xref_right_m, Data.yref_lower_m,
+                                                                  Data.yref_higher_m), args=(que,))
+            thread_visualize.start()
+            """
+
             # Progressbar window
             progressbar = Progressbar("Processing", "Generating graph for Line source...")
 
@@ -1238,6 +1260,12 @@ class ReceptorsTab(tk.Frame, Data):
 
     # Visualize receptors button control
     def btnVisualizeRec(self):
+
+        # Check if rd_list is imported
+        if Data.rd_list is None:
+            tk.messagebox.showerror('Error', 'Covert GIS first in Data Tab')
+            return
+
         fig = visualizeReceptors(Data.rd_list, self.rec_gdf, Data.xref_left_m, Data.xref_right_m,
                                  Data.yref_lower_m,
                                  Data.yref_higher_m)
