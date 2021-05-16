@@ -498,7 +498,7 @@ class DataTab(tk.Frame, Data):
     # Verify inputs button
     def btnVerify(self):
         # Set test input (This is for test!!!)
-        #self.setTestInput()
+        # self.setTestInput()
 
         # Check input values
         if self.checkInputErr():
@@ -585,6 +585,18 @@ class DataTab(tk.Frame, Data):
         if self.txt_xRef_var.get() == "" or self.txt_yRef_var.get() == "" or self.txt_yHigh_var.get() == "" or self.txt_yLow_var.get() == "" or self.txt_xLeft_var.get() == "" or self.txt_xRight_var.get() == "":
             errMsg += "\n 3. Boundary and Reference point is missed"
             errFlag = False
+        else:
+            try:
+                a = float(self.txt_xRef_var.get())  # Reference X
+                b = float(self.txt_yRef_var.get())  # Reference Y
+                c = float(self.txt_yHigh_var.get())  # Y high
+                d = float(self.txt_yLow_var.get())  # Y low
+                e = float(self.txt_xLeft_var.get())  # X left
+                f = float(self.txt_xRight_var.get())  # X right
+
+            except ValueError:
+                errMsg += "\n 3. Boundary and Reference point should be number"
+                errFlag = False
 
         if errFlag is not True:
             tk.messagebox.showerror('Error', errMsg)
@@ -791,7 +803,6 @@ class RoadTab(tk.Frame, Data):
 
         # Open pop up window
         graphicWin = tk.Toplevel(self)
-
 
         # Set window title
         if index == RoadTabConstants.LINE:
@@ -1061,7 +1072,7 @@ class ReceptorsTab(tk.Frame, Data):
     def btnGraphicExample(self, imgPath):
         # Open pop up window
         graphicWin = tk.Toplevel(self)
-        #center_tk_window.center_on_screen(graphicWin)
+        # center_tk_window.center_on_screen(graphicWin)
         graphicWin.title("Near-road and Gridded Receptors")
 
         img_label = tk.Label(graphicWin, bg='black')
@@ -2231,6 +2242,13 @@ class MainWindow(tk.Tk):
         self.nb.add(self.results_tab, text='Results', padding=5)
 
         self.nb.pack(expand=True, fill="both")
+
+        # Closing control
+        def on_closing():
+            if tk.messagebox.askokcancel("Quit", "Do you want to quit?"):
+                self.destroy()
+
+        self.protocol("WM_DELETE_WINDOW", on_closing)
 
 # def main():
 #    root = MainWindow()
