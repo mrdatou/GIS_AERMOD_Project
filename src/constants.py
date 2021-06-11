@@ -113,64 +113,6 @@ class CompilaionTabConstants():
     avertimeMenu = {'CO': ["1", "8"], 'NO2': ["1", "ANNUAL"], 'PM2.5': ["24", "ANNUAL"], 'PM10': ["24"],
                     'Others': ["1", "8", "24", "ANNUAL"]}
 
-    TEMPLATE = """
-    CO STARTING
-       TITLEONE  An Example Transportation Project
-       MODELOPT  BETA ALPHA FLAT CONC
-       RUNORNOT  RUN
-       AVERTIME  {AVERTIME}
-       URBANOPT  {URBANOPT}
-       FLAGPOLE  {FLAGPOLE}
-       POLLUTID  {POLLUTID}
-    CO FINISHED                                                                                                                       
-
-    ** AREAPOLY Source        xini yini (z)
-    ** RLINE Source         x1 y1 x2 y2 z
-    ** RLINEXT Source      x1 y1 z1 x2 y2 z2
-    ** VOLUME Source      x y (z)
-    SO STARTING
-    {LINK_LOCATION}
-
-    ** AREAPOLY Source        g/s/m2  height  VertixNO  Szinit
-    ** RLINE Source         g/s/m2  height  width  Szinit
-    ** RLINEXT Source      g/s/m  height  width  Szinit
-    ** VOLUME Source      g/s  height  radii  Szinit
-    ** Parameters:        ------  ------  -------   -------   -----  ------
-    {SRCPARAM}
-
-    ** For RLINEXT RBARRIER (optional)
-    {RBARRIER}
-
-    ** For AREAPOLY Source Only      x1 y1 x2 y2 x3 y3 ...
-    {LINKCOORD}
-
-    SO URBANSRC ALL
-    SO SRCGROUP ALL
-
-    SO FINISHED                                                                                                      
-
-    **-------------------------------------                                                                                                                                
-    RE STARTING
-    {RECEPTORCOORD}
-
-    RE FINISHED                                                                                                                         
-
-    ME STARTING                                                                                                                         
-       SURFFILE  {file_sfc}
-       PROFFILE  {file_pfl}
-       SURFDATA  13874  2017  ATLANTA,GA
-       UAIRDATA  53819  2017  ATLANTA,GA                                                                                                 
-       SITEDATA  99999  2017  HUDSON
-       PROFBASE  0.0  METERS
-    ME FINISHED                                                                                                                     
-
-    OU STARTING                                                                                                                         
-       RECTABLE  ALLAVE  FIRST
-       MAXTABLE  ALLAVE  50
-       SUMMFILE  AERTEST.SUM                                                                                         
-    OU FINISHED
-    """
-
 
 class ResultsTabConstants():
     questions = [

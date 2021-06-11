@@ -1,12 +1,10 @@
-import concurrent.futures
-import multiprocessing
 import os
 import queue
 import threading
 import tkinter as tk
 import tkinter.ttk as ttk
 import webbrowser
-from time import sleep
+
 from tkinter import filedialog
 from tkinter import font
 import center_tk_window
@@ -15,7 +13,6 @@ import numpy as np
 import pandas as pd
 import tksheet
 from GISPlotWindow import GISplotWindow
-from PIL import Image, ImageTk
 from constants import RoadTabConstants, ReceptorsTabConstants, EmissionsTabConstants, CompilaionTabConstants, \
     ResultsTabConstants
 from generate_data import GISextract, dataConversion, generateLINE, generateAREA, visualizeLINE, visualizeAREA, \
@@ -159,7 +156,6 @@ class DataTab(tk.Frame, Data):
                                              )
 
         if os.path.exists(path):
-            # print("path exist")
             # Clear all values of old shp file
             if self.isOpenSecond.get():
                 self.clearAllVals()
@@ -485,8 +481,6 @@ class DataTab(tk.Frame, Data):
 
         # Set GIS plot window with pop-up-window
         self.buildMapWindow(locateGraphWindow)
-
-        locateGraphWindow.mainloop()
 
     # Build GIS plot window
     def buildMapWindow(self, window):
@@ -1155,6 +1149,9 @@ class ReceptorsTab(tk.Frame, Data):
 
         # Read csv as dataframe
         csv_df = pd.read_csv(path)
+
+        if self.sheet is not None:
+            self.sheet.destroy()
 
         self.sheet = Sheet(csv_df, self.receptor_gen_frame)
         self.sheet.grid(row=5, column=0, columnspan=2)
@@ -1853,7 +1850,6 @@ class CompilationButtons(tk.Frame, Data):
 
         # Run AERMOD: AREA input
         if self.title == "AREA":
-            print(self.title)
 
             progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD AREA")
 
@@ -1870,7 +1866,6 @@ class CompilationButtons(tk.Frame, Data):
 
         # Run AERMOD: VOLUME
         if self.title == "VOLUME":
-            print(self.title)
 
             progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD VOLUME")
 
@@ -1888,7 +1883,6 @@ class CompilationButtons(tk.Frame, Data):
 
         # Run AERMOD: LINE
         if self.title == "LINE":
-            print(self.title)
 
             progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD LINE")
 
@@ -1906,7 +1900,6 @@ class CompilationButtons(tk.Frame, Data):
 
         # Run AERMOD: BETA RLINE
         if self.title == "BETA RLINE":
-            print(self.title)
 
             progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD RLINE")
 
@@ -1924,7 +1917,6 @@ class CompilationButtons(tk.Frame, Data):
 
         # Run AERMOD: ALPHA RLINEXT
         if self.title == "ALPHA RLINEXT":
-            print(self.title)
 
             progressbar = Progressbar("Processing", "Running AERMOD or compiling AERMOD RLINEXT")
 
@@ -2246,7 +2238,7 @@ class MainWindow(tk.Tk):
         # Closing control
         def on_closing():
             if tk.messagebox.askokcancel("Quit", "Do you want to quit?"):
-                self.destroy()
+                self.quit()
 
         self.protocol("WM_DELETE_WINDOW", on_closing)
 
